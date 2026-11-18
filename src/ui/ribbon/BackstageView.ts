@@ -24,7 +24,6 @@ type OpenPlace = 'recent' | 'computer';
 type OpenRecentTab = 'projects' | 'graphs';
 type SavePlace = 'computer' | 'recent';
 type SaveTarget = 'project' | 'graph';
-type SaveFormat = 'arestrix' | 'folder' | 'json';
 export type RecencyGroup = 'today' | 'yesterday' | 'last_week' | 'last_month' | 'older';
 
 const RECENCY_ORDER: RecencyGroup[] = ['today', 'yesterday', 'last_week', 'last_month', 'older'];
@@ -33,7 +32,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const ENTRY_ICONS: Record<OpenableEntryKind, string> = {
   folder: '📁',
   project: '🗂️',
-  package: '📦',
   manifest: '📋',
   json: '📊'
 };
@@ -69,7 +67,6 @@ export class BackstageView {
   private saveAsSubdirectories: Array<{ name: string; path: string }> = [];
   private saveAsEntries: IOpenableEntry[] = [];
   private saveAsFileName: string = '';
-  private saveAsFormat: SaveFormat = 'arestrix';
 
   // Estado da Tela "Abrir" (Recentes / Este Computador / Procurar)
   private openPlace: OpenPlace = 'recent';
@@ -379,7 +376,7 @@ export class BackstageView {
           <button type="button" class="backstage-open-place" id="btn-open-browse" title="${t('backstage.open.place_browse_tip')}">
             <span class="backstage-open-place-icon">${ribbonIcon('folderOpen', 18)}</span><span>${t('backstage.open.place_browse')}</span>
           </button>
-          <input type="file" id="backstage-open-file-input" accept=".arestrix,.json" style="display: none;" />
+          <input type="file" id="backstage-open-file-input" accept=".json" style="display: none;" />
         </nav>
 
         <section class="backstage-open-content">
@@ -625,14 +622,11 @@ export class BackstageView {
 
   public getSavePreviewPath(): string {
     const baseDir = (this.saveAsCurrentPath || '.').replace(/\\/g, '/').replace(/\/$/, '');
-    const cleanName = (this.saveAsFileName || 'projeto').trim().replace(/\.(arestrix|json)$/i, '') || 'projeto';
-    if (this.saveAsFormat === 'folder') {
-      return `${baseDir}/${cleanName}/arestrix.project.json`;
-    }
-    if (this.saveAsFormat === 'json') {
+    const cleanName = (this.saveAsFileName || 'projeto').trim().replace(/\.json$/i, '') || 'projeto';
+    if (this.saveAsTarget === 'graph') {
       return `${baseDir}/${cleanName}.json`;
     }
-    return `${baseDir}/${cleanName}.arestrix`;
+    return `${baseDir}/${cleanName}/arestrix.project.json`;
   }
 
   private getSaveDestinationContextLabel(proj: IProjectManifest): string {
@@ -716,15 +710,6 @@ export class BackstageView {
               <div>
                 <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${isGraph ? t('backstage.saveas.filename_graph_field') : t('backstage.saveas.filename_project_field')}</label>
                 <input type="text" id="saveas-input-filename" class="form-input properties-code-input" value="${this.escapeHtml(this.saveAsFileName)}" placeholder="${t('backstage.saveas.filename_placeholder')}" />
-              </div>
-
-              <div>
-                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.saveas.filetype_field')}</label>
-                <select id="saveas-select-format" class="form-select">
-                  <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>${t('backstage.saveas.format_arestrix')}</option>
-                  <option value="folder" ${this.saveAsFormat === 'folder' ? 'selected' : ''}>${t('backstage.saveas.format_folder')}</option>
-                  <option value="json" ${this.saveAsFormat === 'json' ? 'selected' : ''}>${t('backstage.saveas.format_json')}</option>
-                </select>
               </div>
 
               <button type="button" class="btn btn-primary-office" id="btn-saveas-submit">
@@ -1056,6 +1041,15 @@ export class BackstageView {
               </div>
               <button class="btn btn-secondary-office" id="btn-backstage-export-svg">${t('backstage.export.btn_export_svg')}</button>
             </article>
+
+            <article class="backstage-export-card">
+              <span class="backstage-export-icon">${ribbonIcon('box', 22)}</span>
+              <div class="backstage-export-body">
+                <h3>${t('backstage.export.project_zip_title', 'Projeto (.arestrix.zip)')}</h3>
+                <p>${t('backstage.export.project_zip_desc', 'Cria um ZIP da pasta do projeto para backup, transporte ou envio. Para abrir, descompacte e escolha a pasta.')}</p>
+              </div>
+              <button class="btn btn-secondary-office" id="btn-backstage-export-project-zip">${t('backstage.export.btn_export_project_zip', 'Exportar projeto')}</button>
+            </article>
           </div>
         `;
 
@@ -1230,14 +1224,10 @@ export class BackstageView {
           const proj = this.projectManager.getCurrentProject();
           const projRoot = (proj.rootPath && proj.rootPath !== '.') ? proj.rootPath.replace(/\\/g, '/').replace(/\/$/, '') : '';
           if (target === 'graph') {
-            this.saveAsFormat = 'json';
             if (projRoot && this.saveAsCurrentPath.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase() === projRoot.toLowerCase()) {
               await this.loadSaveDirectoryListing(`${projRoot}/pipelines`);
             }
           } else {
-            if (this.saveAsFormat === 'json') {
-              this.saveAsFormat = 'arestrix';
-            }
             const curNorm = this.saveAsCurrentPath.replace(/\\/g, '/').replace(/\/$/, '');
             if (curNorm.toLowerCase().endsWith('/pipelines')) {
               await this.loadSaveDirectoryListing(dirName(curNorm));
@@ -1276,7 +1266,6 @@ export class BackstageView {
           const pipePath = btn.dataset?.savePipelines || btn.getAttribute?.('data-save-pipelines');
           if (pipePath) {
             this.saveAsTarget = 'graph';
-            this.saveAsFormat = 'json';
             this.saveAsPlace = 'computer';
             await this.navigateSaveFolder(pipePath);
           }
@@ -1297,14 +1286,10 @@ export class BackstageView {
         row.addEventListener('click', () => {
           const name = row.dataset?.name || row.getAttribute?.('data-name') || '';
           if (!name) return;
+          const lowerName = name.toLowerCase();
+          const isManifest = lowerName === 'arestrix.project.json' || lowerName === 'taskforge.project.json';
           this.saveAsFileName = stripExtension(name);
-          if (name.toLowerCase().endsWith('.json')) {
-            this.saveAsTarget = 'graph';
-            this.saveAsFormat = 'json';
-          } else if (name.toLowerCase().endsWith('.arestrix')) {
-            this.saveAsTarget = 'project';
-            this.saveAsFormat = 'arestrix';
-          }
+          this.saveAsTarget = lowerName.endsWith('.json') && !isManifest ? 'graph' : 'project';
           this.render();
         });
       });
@@ -1363,19 +1348,7 @@ export class BackstageView {
         }
       });
 
-      // 7. Atualização do Formato (sincroniza automaticamente com o escopo Projeto vs Grafo)
-      const formatSelect = this.overlay.querySelector('#saveas-select-format') as HTMLSelectElement;
-      formatSelect?.addEventListener('change', () => {
-        this.saveAsFormat = formatSelect.value as SaveFormat;
-        this.saveAsTarget = this.saveAsFormat === 'json' ? 'graph' : 'project';
-        const preview = this.overlay?.querySelector('#saveas-path-preview');
-        if (preview) {
-          preview.textContent = this.getSavePreviewPath();
-        }
-        this.render();
-      });
-
-      // 8. Executar Salvamento (Projeto em pacote .arestrix, Pasta de Projeto, ou Grafo .json)
+      // 7. Executar Salvamento (Pasta de Projeto ou Grafo .json)
       this.overlay.querySelector('#btn-saveas-submit')?.addEventListener('click', async () => {
         const fileName = (this.saveAsFileName || 'projeto').trim();
         if (!fileName) {
@@ -1383,21 +1356,7 @@ export class BackstageView {
           return;
         }
 
-        if (this.saveAsFormat === 'arestrix') {
-          const res = await this.projectManager.saveProjectAsArestrix(this.saveAsCurrentPath, fileName, this.graph);
-          if (res && res.success) {
-            this.notify(t('backstage.alerts.pkg_saved', { path: res.filePath }));
-            this.render();
-          } else {
-            this.notify(t('backstage.alerts.pkg_error'));
-          }
-        } else if (this.saveAsFormat === 'folder') {
-          const res = await this.projectManager.saveProjectToDirectory(this.saveAsCurrentPath, fileName, this.graph);
-          if (res && res.success) {
-            this.notify(t('backstage.alerts.project_dir_saved', { path: res.rootPath }));
-            this.render();
-          }
-        } else {
+        if (this.saveAsTarget === 'graph') {
           const res = await this.projectManager.saveGraphToFile(this.saveAsCurrentPath, fileName, this.graph);
           if (res && res.success) {
             this.notify(
@@ -1405,6 +1364,12 @@ export class BackstageView {
                 ? t('backstage.alerts.graph_file_saved_linked', { path: res.filePath })
                 : t('backstage.alerts.graph_file_saved', { path: res.filePath })
             );
+            this.render();
+          }
+        } else {
+          const res = await this.projectManager.saveProjectToDirectory(this.saveAsCurrentPath, fileName, this.graph);
+          if (res && res.success) {
+            this.notify(t('backstage.alerts.project_dir_saved', { path: res.rootPath }));
             this.render();
           }
         }
@@ -1589,6 +1554,27 @@ export class BackstageView {
       globalEventBus.emit('ribbon:export-svg');
     });
 
+    this.overlay.querySelector('#btn-backstage-export-project-zip')?.addEventListener('click', async () => {
+      const webui = (window as any).webui;
+      if (!webui || typeof webui.call !== 'function') {
+        this.notify(t('backstage.export.project_zip_no_backend', 'Exportação de projeto disponível apenas no aplicativo desktop.'));
+        return;
+      }
+      try {
+        const picked = await webui.call('pick_folder');
+        const targetDir = typeof picked === 'string' ? picked.trim() : '';
+        if (!targetDir) return;
+        const res = await this.projectManager.exportProjectZip(this.graph, targetDir);
+        if (res.ok) {
+          this.notify(t('backstage.alerts.project_zip_saved', { path: res.path || targetDir }));
+        } else {
+          this.notify(res.error || t('backstage.alerts.project_zip_error', 'Não foi possível exportar o projeto.'));
+        }
+      } catch (e: any) {
+        this.notify(e?.message || t('backstage.alerts.project_zip_error', 'Não foi possível exportar o projeto.'));
+      }
+    });
+
     this.overlay.querySelector('#btn-quick-sync-db')?.addEventListener('click', () => {
       if (typeof alert !== 'undefined') alert(t('backstage.alerts.db_synced'));
     });
@@ -1747,8 +1733,6 @@ export class BackstageView {
     const picked = await this.projectManager.pickFile({
       title: t('backstage.open.picker_title'),
       filters: [
-        { name: `${t('backstage.open.filter_all')} (*.arestrix, *.json)`, pattern: '*.arestrix;*.json' },
-        { name: `${t('backstage.open.filter_package')} (*.arestrix)`, pattern: '*.arestrix' },
         { name: `${t('backstage.open.filter_json')} (*.json)`, pattern: '*.json' }
       ],
       initialDir: this.openListing?.exists ? this.openListing.path : undefined
@@ -1785,9 +1769,7 @@ export class BackstageView {
 
   private reportOpenResult(res: IOpenResult, path: string): void {
     if (res.ok) {
-      if (res.kind === 'package') {
-        this.notify(t('backstage.open.alert_package_extracted', { path: res.path }));
-      } else if (res.kind === 'graph') {
+      if (res.kind === 'graph') {
         this.notify(t('backstage.alerts.canvas_graph_loaded'));
       } else {
         this.notify(t('backstage.alerts.project_loaded', { name: this.projectManager.getCurrentProject().name }));

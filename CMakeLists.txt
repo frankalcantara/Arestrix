@@ -234,6 +234,7 @@ add_library(arestrix_core STATIC
   ${SRC}/project/CorporateVault.cpp
   ${SRC}/project/RunnerSecurity.cpp
   ${SRC}/project/RunnerPackaging.cpp
+  ${SRC}/project/ProjectArchive.cpp
   ${SRC}/search/ProjectSearch.cpp
   ${SRC}/search/Synonyms.cpp
   ${SRC}/search/SynonymAgent.cpp

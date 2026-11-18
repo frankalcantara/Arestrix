@@ -1141,7 +1141,7 @@
   font-weight: 700;
 }
 
-/* --- Tela Salvar Como (Navegação de Discos e Pastas / Pacotes .arestrix) --- */
+/* --- Tela Salvar Como (Navegação de Discos e Pastas) --- */
 .saveas-drives-list {
   display: flex;
   gap: 8px;
@@ -1351,7 +1351,7 @@
 
 .backstage-save-form-row {
   display: grid;
-  grid-template-columns: 1.2fr 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: end;
 }

@@ -91,20 +91,21 @@ The **Info** page summarises the active project in five cards: identification, s
 The **Open** screen follows Office's Open. Locations sit on the left and the file table uses **Name / Date modified / Type / Size** columns, with a search box aligned to the right.
 
 - **Recent**: two tabs, **Projects** (grouped by Today, Yesterday, Previous 7 days, Previous 30 days and Older) and **Graphs** (the pipelines of the current project).
-- **This PC**: browses drives and folders. It shows subfolders, project folders (with `arestrix.project.json`), `.arestrix` packages and `.json` files. Clicking a project folder opens the project; the button next to it enters the folder without opening it.
+- **This PC**: browses drives and folders. It shows subfolders, project folders (with `arestrix.project.json`) and `.json` files. Clicking a project folder opens the project; the button next to it enters the folder without opening it.
 - **Browse**: opens the system file picker.
 
 ![Office-style Open screen](../assets/screenshots/open-screen.webp)
 
-An `.arestrix` package is extracted into a new folder next to it (`name`, `name (2)`, ...) and opened as a project. A `.json` graph inside `<project>/pipelines` opens the whole project; a loose graph replaces the current project's canvas only after confirmation.
+A project folder opens directly. A `.json` graph inside `<project>/pipelines` opens the whole project; a loose graph replaces the current project's canvas only after confirmation.
 
 ### Save
 
 The **Save** screen unifies quick saving and *Save As* in the Office style:
 
 - On the left, you can **Save Current Project** directly in place or choose a destination via **This PC**, **Recent Locations**, or **Browse Folder**.
-- On the right, a prominent scope selector at the top lets you choose between **Complete Project** (`.arestrix` package or structured project folder with `arestrix.project.json` + `pipelines/main.json`) and **Single Project Graph** (`.json` pipeline file). It provides full drive, folder, and breadcrumb navigation, quick shortcuts to the active project's root and `pipelines/` folder, and automatic registration in the project manifest when a graph is saved inside the open project.
-- Location icons, scope cards, filename/format fields and footer buttons use the same Office shell as the rest of the File menu.
+- On the right, a prominent scope selector at the top lets you choose between **Complete Project** (structured project folder with `arestrix.project.json` + `pipelines/main.json`) and **Single Project Graph** (`.json` pipeline file). It provides full drive, folder, and breadcrumb navigation, quick shortcuts to the active project's root and `pipelines/` folder, and automatic registration in the project manifest when a graph is saved inside the open project.
+- The folder is the only project save format. For backup or sharing, the **Export** menu creates an `.arestrix.zip` file with the project files and excludes runtime, builds, databases, models and secrets.
+- Location icons, scope cards, filename fields and footer buttons use the same Office shell as the rest of the File menu.
 
 ![File menu Save page](../assets/screenshots/file-menu-save.webp)
 

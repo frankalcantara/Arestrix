@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { Graph } from '../src/core/Graph.ts';
 import { ProjectManager } from '../src/core/ProjectManager.ts';
 import { EventBus } from '../src/core/EventBus.ts';
 import { BackstageView } from '../src/ui/ribbon/BackstageView.ts';
-import { IArestrixBundle } from '../src/core/types.ts';
 
 class MockElement {
   tagName: string;
@@ -169,7 +168,7 @@ function parseHTMLToMock(html: string, root: MockElement) {
   }
 }
 
-describe('Pacotes de Projeto .arestrix e Tela Salvar Unificada (Estilo Office)', () => {
+describe('Tela Salvar Unificada e Projeto em Pasta (Estilo Office)', () => {
   let graph: Graph;
   let bus: EventBus;
   let pm: ProjectManager;
@@ -209,70 +208,10 @@ describe('Pacotes de Projeto .arestrix e Tela Salvar Unificada (Estilo Office)',
     }
   });
 
-  it('deve exportar um IArestrixBundle contendo manifesto, grafos/pipelines, variáveis e defaults', () => {
-    graph.addNode({
-      id: 'node-1',
-      type: 'agent',
-      label: 'Agente Analista',
-      position: { x: 100, y: 150 },
-      inputs: [],
-      outputs: []
-    });
-
-    const bundle: IArestrixBundle = pm.exportArestrixBundle(graph);
-
-    expect(bundle.format).toBe('arestrix-package');
-    expect(bundle.version).toBe('1.0.0');
-    expect(bundle.manifest).toBeDefined();
-    expect(bundle.manifest.projectId).toBe('default-workspace');
-    expect(bundle.pipelines).toBeDefined();
-    expect(bundle.pipelines['main']).toBeDefined();
-    expect(bundle.pipelines['main'].nodes.length).toBe(1);
-    expect(bundle.pipelines['main'].nodes[0].label).toBe('Agente Analista');
-  });
-
-  it('deve comprimir e descomprimir o pacote com algoritmo Gzip preservando integridade estrutural', async () => {
-    graph.addNode({
-      id: 'task-a',
-      type: 'static',
-      label: 'Processamento Batch',
-      position: { x: 50, y: 50 },
-      inputs: [],
-      outputs: []
-    });
-
-    const originalBundle = pm.exportArestrixBundle(graph);
-    const compressed = await pm.compressArestrixBundle(originalBundle);
-
-    expect(compressed).toBeInstanceOf(Uint8Array);
-    expect(compressed.length).toBeGreaterThan(0);
-
-    const decompressed = await pm.decompressArestrixBundle(compressed);
-
-    expect(decompressed.format).toBe('arestrix-package');
-    expect(decompressed.manifest.name).toBe(originalBundle.manifest.name);
-    expect(decompressed.pipelines['main'].nodes.length).toBe(1);
-    expect(decompressed.pipelines['main'].nodes[0].id).toBe('task-a');
-  });
-
-  it('deve salvar projeto como pacote .arestrix e registrar no histórico recente', async () => {
-    let savedEventFired = false;
-    let exportedEventFired = false;
-
-    bus.on('project:saved', () => { savedEventFired = true; });
-    bus.on('project:exported', () => { exportedEventFired = true; });
-
-    const result = await pm.saveProjectAsArestrix('C:/Projetos/Testes', 'pipeline_financeiro', graph);
-
-    expect(result.success).toBe(true);
-    expect(result.filePath).toBe('C:/Projetos/Testes/pipeline_financeiro.arestrix');
-    expect(savedEventFired).toBe(true);
-    expect(exportedEventFired).toBe(true);
-
-    const recents = pm.listRecentProjects();
-    expect(recents.length).toBeGreaterThanOrEqual(1);
-    expect(recents[0].name).toBe('pipeline_financeiro');
-    expect(recents[0].manifestPath).toBe('C:/Projetos/Testes/pipeline_financeiro.arestrix');
+  afterEach(() => {
+    if ((globalThis as any).window) {
+      delete (globalThis as any).window.webui;
+    }
   });
 
   it('deve salvar apenas um grafo (.json) e vinculá-lo ao projeto ativo quando salvo dentro da pasta do projeto', async () => {
@@ -329,44 +268,44 @@ describe('Pacotes de Projeto .arestrix e Tela Salvar Unificada (Estilo Office)',
     expect(graph.getAllNodes().length).toBe(1);
   });
 
-  it('deve carregar pacote IArestrixBundle completo restaurando manifesto e nós no canvas', async () => {
-    const customBundle: IArestrixBundle = {
-      format: 'arestrix-package',
-      version: '1.0.0',
-      exportedAt: new Date().toISOString(),
-      manifest: {
-        projectId: 'audit-proj-2026',
-        name: 'Auditoria Agentes 2026',
-        version: '1.2.0',
-        description: 'Auditoria de conformidade de agentes',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        rootPath: 'C:/Projetos/Auditoria',
-        pipelines: [{ id: 'main', name: 'Main', file: 'pipelines/main.json', isPrimary: true }]
-      },
-      pipelines: {
-        main: {
-          version: '1.0',
-          metadata: { graphName: 'Auditoria Agentes 2026', projectId: 'audit-proj-2026' },
-          nodes: [{
-            id: 'audit-node',
-            type: 'agent',
-            label: 'Auditor C++20',
-            position: { x: 200, y: 300 },
-            inputs: [],
-            outputs: []
-          }],
-          edges: []
+  it('recusa exportar o workspace padrao sem pasta de projeto', async () => {
+    (globalThis as any).window.webui = { call: async () => true };
+    const res = await pm.exportProjectZip(graph, 'C:/Backups');
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('Salve o projeto numa pasta');
+  });
+
+  it('deve exportar a pasta do projeto como .arestrix.zip pelo backend', async () => {
+    graph.addNode({
+      id: 'node-export',
+      type: 'static',
+      label: 'Exportar',
+      position: { x: 10, y: 20 },
+      inputs: [],
+      outputs: []
+    });
+    await pm.saveProjectToDirectory('C:/Projetos/Workspaces', 'PipelineETL', graph);
+
+    const calls: Array<{ method: string; payload: any }> = [];
+    (globalThis as any).window.webui = {
+      call: async (method: string, payload?: string) => {
+        calls.push({ method, payload: payload ? JSON.parse(payload) : null });
+        if (method === 'export_project_zip') {
+          return JSON.stringify({ ok: true, path: 'C:/Backups/PipelineETL.arestrix.zip' });
         }
+        return true;
       }
     };
 
-    const ok = await pm.loadArestrixBundle(customBundle, graph);
+    const res = await pm.exportProjectZip(graph, 'C:/Backups');
+    expect(res).toEqual({ ok: true, path: 'C:/Backups/PipelineETL.arestrix.zip' });
 
-    expect(ok).toBe(true);
-    expect(pm.getCurrentProject().name).toBe('Auditoria Agentes 2026');
-    expect(graph.getAllNodes().length).toBe(1);
-    expect(graph.getNode('audit-node')?.label).toBe('Auditor C++20');
+    const exportCall = calls.find(call => call.method === 'export_project_zip');
+    expect(exportCall?.payload).toMatchObject({
+      rootPath: 'C:/Projetos/Workspaces/PipelineETL',
+      targetDir: 'C:/Backups',
+      projectName: 'PipelineETL'
+    });
   });
 
   it('deve listar discos do sistema e subdiretórios com fallbacks resilientes', async () => {
@@ -376,6 +315,19 @@ describe('Pacotes de Projeto .arestrix e Tela Salvar Unificada (Estilo Office)',
 
     const subs = await pm.listSubdirectories('C:/');
     expect(Array.isArray(subs)).toBe(true);
+  });
+
+  it('deve renderizar a ação de exportar o projeto no Backstage', async () => {
+    const fakeCodeModal = { show: () => {} } as any;
+    const fakeDefaultsModal = { show: () => {} } as any;
+    const backstage = new BackstageView(graph, fakeCodeModal, fakeDefaultsModal);
+
+    await backstage.open('export');
+
+    const overlay = document.querySelector('.office-backstage-overlay');
+    expect(overlay).not.toBeNull();
+    expect(overlay?.querySelector('#btn-backstage-export-project-zip')).not.toBeNull();
+    expect(overlay?.innerHTML || '').toContain('Projeto (.arestrix.zip)');
   });
 
   it('deve renderizar o menu único "Salvar" no Backstage (Estilo Office) com seleção Projeto vs Grafo e navegação de pastas', async () => {
@@ -409,7 +361,7 @@ describe('Pacotes de Projeto .arestrix e Tela Salvar Unificada (Estilo Office)',
 
     // Inputs e botão de salvar
     expect(overlay?.querySelector('#saveas-input-filename')).not.toBeNull();
-    expect(overlay?.querySelector('#saveas-select-format')).not.toBeNull();
+    expect(overlay?.querySelector('#saveas-select-format')).toBeNull();
     expect(overlay?.querySelector('#btn-saveas-submit')).not.toBeNull();
 
     // Alterna para "Apenas um Grafo do Projeto" e verifica mudança automática para .json

@@ -973,7 +973,7 @@ export interface IRecentProjectItem {
 }
 
 // Itens de uma pasta na tela Abrir (list_openable_entries do backend C++).
-export type OpenableEntryKind = 'folder' | 'project' | 'package' | 'manifest' | 'json';
+export type OpenableEntryKind = 'folder' | 'project' | 'manifest' | 'json';
 
 export interface IOpenableEntry {
   name: string;
@@ -993,7 +993,7 @@ export interface IOpenableListing {
 
 export interface IFilePickFilter {
   name: string;
-  pattern: string; // padroes separados por ';' (ex: "*.arestrix;*.json")
+  pattern: string; // padroes separados por ';' (ex: "*.json")
 }
 
 export interface IOpenOptions {
@@ -1003,20 +1003,9 @@ export interface IOpenOptions {
 
 export interface IOpenResult {
   ok: boolean;
-  kind?: 'project' | 'package' | 'graph';
+  kind?: 'project' | 'graph';
   path?: string;
   reason?: 'cancelled' | 'invalid' | 'unsupported';
-}
-
-export interface IArestrixBundle {
-  format: 'arestrix-package';
-  version: string;
-  generator?: string;
-  exportedAt: string;
-  manifest: IProjectManifest;
-  pipelines: Record<string, IGraphSchema | any>;
-  environment?: Record<string, string>;
-  globalDefaults?: IGlobalPipelineDefaults;
 }
 
 export interface IGraphSchema {

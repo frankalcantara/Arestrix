@@ -2,7 +2,6 @@ import { EventBus, globalEventBus } from './EventBus.ts';
 import {
   IProjectManifest,
   IRecentProjectItem,
-  IArestrixBundle,
   IGraphSchema,
   IOpenableListing,
   IFilePickFilter,
@@ -11,80 +10,26 @@ import {
 } from './types.ts';
 import { Graph } from './Graph.ts';
 import { hashProjectName } from './hash.ts';
-import { baseName, dirName, joinPath, stripExtension } from './paths.ts';
+import { baseName, dirName } from './paths.ts';
 
 const PROJECT_MANIFEST_NAMES = ['arestrix.project.json', 'taskforge.project.json'];
 
 export type OpenedFileContent =
-  | { type: 'package'; bundle: IArestrixBundle }
   | { type: 'manifest' }
   | { type: 'graph'; schema: IGraphSchema }
   | { type: 'unknown' };
 
-// Identifica pelo conteudo o que um arquivo escolhido na tela Abrir contem (pacote gzip ou JSON).
+// Identifica pelo conteudo o que um arquivo JSON escolhido na tela Abrir contem.
 export async function classifyOpenedFile(bytes: Uint8Array): Promise<OpenedFileContent> {
   try {
-    const isGzip = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
-    const parsed = JSON.parse(isGzip ? await decompressGzip(bytes) : new TextDecoder().decode(bytes));
-    if (parsed && parsed.format === 'arestrix-package' && parsed.manifest) return { type: 'package', bundle: parsed };
+    const parsed = JSON.parse(new TextDecoder().decode(bytes));
     if (parsed && typeof parsed.projectId === 'string' && Array.isArray(parsed.pipelines)) return { type: 'manifest' };
     if (parsed && Array.isArray(parsed.nodes)) return { type: 'graph', schema: parsed };
   } catch (_) {}
   return { type: 'unknown' };
 }
 
-// Utilitários de Compressão e Base64 para Pacotes .arestrix
-export async function compressGzip(data: string | Uint8Array): Promise<Uint8Array> {
-  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-  if (typeof CompressionStream !== 'undefined') {
-    const cs = new CompressionStream('gzip');
-    const writer = cs.writable.getWriter();
-    writer.write(bytes as any);
-    writer.close();
-    const reader = cs.readable.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
-    }
-    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-      result.set(chunk, offset);
-      offset += chunk.length;
-    }
-    return result;
-  }
-  return bytes;
-}
-
-export async function decompressGzip(data: Uint8Array): Promise<string> {
-  if (typeof DecompressionStream !== 'undefined') {
-    const ds = new DecompressionStream('gzip');
-    const writer = ds.writable.getWriter();
-    writer.write(data as any);
-    writer.close();
-    const reader = ds.readable.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
-    }
-    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-      result.set(chunk, offset);
-      offset += chunk.length;
-    }
-    return new TextDecoder().decode(result);
-  }
-  return new TextDecoder().decode(data);
-}
-
+// Utilitários Base64 usados pela ponte de arquivos do WebUI.
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
   const nodeBuf = (globalThis as any).Buffer;
   if (nodeBuf && typeof nodeBuf.from === 'function') {
@@ -662,130 +607,13 @@ export class ProjectManager {
     this.bus.emit('project:recents-updated', this.recentProjects);
   }
 
-  // --- Pacote de Projeto Comprimido (.arestrix) ---
-
-  public exportArestrixBundle(graph: Graph): IArestrixBundle {
-    const manifest = this.getCurrentProject();
-    const pipelines: Record<string, any> = {
-      main: graph.getRootSchema()
-    };
-
-    // Inclui pipelines em cache se houver outros
-    this.pipelineStorage.forEach((val, key) => {
-      try {
-        pipelines[key] = JSON.parse(val);
-      } catch (_) {
-        pipelines[key] = val;
-      }
-    });
-
-    return {
-      format: 'arestrix-package',
-      version: '1.0.0',
-      generator: 'Arestrix Studio 2.0',
-      exportedAt: new Date().toISOString(),
-      manifest,
-      pipelines,
-      environment: manifest.environment || {},
-      globalDefaults: manifest.globalDefaults || graph.getGlobalDefaults()
-    };
-  }
-
-  public async compressArestrixBundle(bundle: IArestrixBundle): Promise<Uint8Array> {
-    const jsonStr = JSON.stringify(bundle, null, 2);
-    return await compressGzip(jsonStr);
-  }
-
-  public async decompressArestrixBundle(data: Uint8Array): Promise<IArestrixBundle> {
-    const jsonStr = await decompressGzip(data);
-    const parsed = JSON.parse(jsonStr);
-    if (!parsed || parsed.format !== 'arestrix-package') {
-      throw new Error('Arquivo não possui o formato de pacote válido do Arestrix (.arestrix)');
-    }
-    return parsed as IArestrixBundle;
-  }
-
-  public async saveProjectAsArestrix(
-    targetDir: string,
-    fileName: string,
-    graph: Graph
-  ): Promise<{ success: boolean; filePath: string; bundle: IArestrixBundle }> {
-    let cleanName = fileName.trim();
-    if (!cleanName) cleanName = this.currentProject.name || 'projeto';
-    if (!cleanName.endsWith('.arestrix')) {
-      cleanName += '.arestrix';
-    }
-
-    const normalizedDir = (targetDir || '.').replace(/\\/g, '/').replace(/\/$/, '');
-    const fullPath = `${normalizedDir}/${cleanName}`;
-
-    const bundle = this.exportArestrixBundle(graph);
-    const baseProjectName = cleanName.replace(/\.arestrix$/, '');
-    bundle.manifest.name = baseProjectName;
-    bundle.manifest.rootPath = normalizedDir;
-    bundle.manifest.updatedAt = new Date().toISOString();
-
-    const compressed = await this.compressArestrixBundle(bundle);
-    const b64 = uint8ArrayToBase64(compressed);
-
-    let savedOnDisk = false;
-    try {
-      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
-        const ok = await (window as any).webui.call('save_arestrix_file', JSON.stringify({
-          targetPath: fullPath,
-          content: b64,
-          isBase64: true
-        }));
-        savedOnDisk = ok;
-      }
-    } catch (e) {
-      console.warn('[ProjectManager] Erro ao salvar via WebUI:', e);
-    }
-
-    // Se estiver em navegador sem backend C++, dispara download direto do arquivo
-    if (!savedOnDisk && typeof document !== 'undefined' && typeof Blob !== 'undefined') {
-      try {
-        const blob = new Blob([compressed as any], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = cleanName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        savedOnDisk = true;
-      } catch (_) {}
-    }
-
-    this.currentProject = {
-      ...this.currentProject,
-      name: baseProjectName,
-      rootPath: normalizedDir,
-      updatedAt: bundle.manifest.updatedAt
-    };
-
-    this.addRecentItem({
-      projectId: bundle.manifest.projectId || hashProjectName(baseProjectName),
-      name: baseProjectName,
-      rootPath: normalizedDir,
-      manifestPath: fullPath,
-      lastOpened: new Date().toISOString()
-    });
-
-    this.bus.emit('project:saved', this.currentProject);
-    this.bus.emit('project:exported', { filePath: fullPath, bundle });
-
-    return { success: true, filePath: fullPath, bundle };
-  }
-
   public async saveProjectToDirectory(
     targetDir: string,
     folderName: string,
     graph: Graph
   ): Promise<{ success: boolean; rootPath: string; manifestPath: string }> {
     const now = new Date().toISOString();
-    let cleanFolder = folderName.trim().replace(/\.(arestrix|json)$/i, '').trim();
+    let cleanFolder = folderName.trim();
     if (!cleanFolder) cleanFolder = this.currentProject.name || 'projeto';
 
     const normalizedDir = (targetDir || '.').replace(/\\/g, '/').replace(/\/$/, '');
@@ -844,12 +672,44 @@ export class ProjectManager {
     return { success: true, rootPath, manifestPath };
   }
 
+  public async exportProjectZip(
+    graph: Graph,
+    targetDir?: string
+  ): Promise<{ ok: boolean; path?: string; error?: string }> {
+    const rootValue = (this.currentProject.rootPath || '').trim();
+    if (!rootValue || rootValue === '.') {
+      return { ok: false, error: 'Salve o projeto numa pasta antes de exportar.' };
+    }
+    const webui = this.webuiBridge();
+    if (!webui) {
+      return { ok: false, error: 'Sem backend WebUI para exportar o projeto.' };
+    }
+    const root = rootValue.replace(/\\/g, '/').replace(/\/$/, '');
+    const destination = (targetDir || dirName(root) || '.').replace(/\\/g, '/').replace(/\/$/, '') || '.';
+    await this.saveCurrentProject();
+    await this.savePipeline(graph);
+    try {
+      const raw = await webui.call('export_project_zip', JSON.stringify({
+        rootPath: root,
+        targetDir: destination,
+        projectName: this.currentProject.name
+      }));
+      const res = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (res && res.ok) {
+        return { ok: true, path: res.path || '' };
+      }
+      return { ok: false, error: res?.error || 'Falha ao exportar o projeto.' };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
   public async saveGraphToFile(
     targetDir: string,
     fileName: string,
     graph: Graph
   ): Promise<{ success: boolean; filePath: string; registeredInProject: boolean; schema: IGraphSchema }> {
-    let cleanName = fileName.trim().replace(/\.(arestrix|json)$/i, '').trim();
+    let cleanName = fileName.trim().replace(/\.json$/i, '').trim();
     if (!cleanName) {
       cleanName = graph.getMetadata()?.graphName || 'pipeline';
     }
@@ -871,7 +731,7 @@ export class ProjectManager {
     try {
       const webui = this.webuiBridge();
       if (webui) {
-        const ok = await webui.call('save_arestrix_file', JSON.stringify({
+        const ok = await webui.call('save_project_file', JSON.stringify({
           targetPath: fullPath,
           content: jsonStr,
           isBase64: false
@@ -956,42 +816,6 @@ export class ProjectManager {
     return { success: true, filePath: fullPath, registeredInProject, schema };
   }
 
-  public async loadArestrixBundle(bundle: IArestrixBundle, graph?: Graph): Promise<boolean> {
-    if (!bundle || bundle.format !== 'arestrix-package' || !bundle.manifest) {
-      return false;
-    }
-
-    this.currentProject = {
-      ...this.createDefaultManifest(),
-      ...bundle.manifest
-    };
-
-    if (bundle.pipelines) {
-      for (const [key, pipe] of Object.entries(bundle.pipelines)) {
-        this.pipelineStorage.set(key, JSON.stringify(pipe));
-      }
-      if (bundle.pipelines['main'] && graph) {
-        graph.fromJSON(bundle.pipelines['main']);
-      }
-    }
-
-    this.addRecentItem({
-      projectId: this.currentProject.projectId,
-      name: this.currentProject.name,
-      rootPath: this.currentProject.rootPath,
-      manifestPath: `${this.currentProject.rootPath}/${this.currentProject.name}.arestrix`,
-      lastOpened: new Date().toISOString()
-    });
-
-    if (graph) {
-      this.syncWithGraph(graph);
-    }
-
-    this.bus.emit('project:loaded', this.currentProject);
-    this.bus.emit('project:changed', this.currentProject);
-    return true;
-  }
-
   public async listDrives(): Promise<string[]> {
     try {
       if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
@@ -1018,7 +842,7 @@ export class ProjectManager {
     return [];
   }
 
-  // --- Tela Abrir: navegar no disco e abrir projetos, pacotes e grafos ---
+  // --- Tela Abrir: navegar no disco e abrir projetos e grafos ---
 
   private webuiBridge(): any | null {
     const webui = typeof window !== 'undefined' ? (window as any).webui : undefined;
@@ -1067,7 +891,7 @@ export class ProjectManager {
     const webui = this.webuiBridge();
     if (!webui) return null;
     try {
-      const raw = await webui.call('load_arestrix_file', JSON.stringify({ filePath }));
+      const raw = await webui.call('read_project_file', JSON.stringify({ filePath }));
       const resp = typeof raw === 'string' ? JSON.parse(raw) : raw;
       if (resp && resp.success && typeof resp.base64 === 'string') {
         return base64ToUint8Array(resp.base64);
@@ -1077,14 +901,14 @@ export class ProjectManager {
   }
 
   /**
-   * Abre o que foi escolhido no disco: pasta de projeto, manifesto, pacote .arestrix ou grafo .json.
+   * Abre o que foi escolhido no disco: pasta de projeto, manifesto ou grafo .json.
    * Um grafo dentro de <projeto>/pipelines abre o projeto inteiro; um grafo avulso so substitui o
    * canvas do projeto atual se `options.confirmLooseGraph` aceitar.
    */
   public async openFromDisk(path: string, graph: Graph, options: IOpenOptions = {}): Promise<IOpenResult> {
     const name = baseName(path);
     const lower = name.toLowerCase();
-    const isFile = lower.endsWith('.arestrix') || lower.endsWith('.json');
+    const isFile = lower.endsWith('.json');
     if (!isFile || PROJECT_MANIFEST_NAMES.includes(lower)) {
       return this.openProjectAt(path, graph);
     }
@@ -1093,8 +917,6 @@ export class ProjectManager {
     if (!bytes) return { ok: false, reason: 'invalid' };
     const content = await classifyOpenedFile(bytes);
     switch (content.type) {
-      case 'package':
-        return this.extractPackage(content.bundle, path, graph);
       case 'manifest':
         return this.openProjectAt(path, graph);
       case 'graph': {
@@ -1114,10 +936,6 @@ export class ProjectManager {
   public async openFromBytes(bytes: Uint8Array, fileName: string, graph: Graph, options: IOpenOptions = {}): Promise<IOpenResult> {
     const content = await classifyOpenedFile(bytes);
     switch (content.type) {
-      case 'package':
-        return (await this.loadArestrixBundle(content.bundle, graph))
-          ? { ok: true, kind: 'project', path: fileName }
-          : { ok: false, reason: 'invalid' };
       case 'manifest':
         return { ok: false, reason: 'unsupported' };
       case 'graph':
@@ -1139,34 +957,6 @@ export class ProjectManager {
     graph.fromJSON(schema);
     this.syncWithGraph(graph);
     return { ok: true, kind: 'graph', path: fileName };
-  }
-
-  // O pacote vira um projeto numa pasta nova ao lado dele ("nome", "nome (2)", ...): os salvamentos
-  // seguintes precisam de uma pasta de projeto e nao podem sobrescrever outro projeto.
-  private async extractPackage(bundle: IArestrixBundle, packagePath: string, graph: Graph): Promise<IOpenResult> {
-    const parent = dirName(packagePath);
-    const base = stripExtension(baseName(packagePath)) || bundle.manifest.name || 'projeto';
-    const siblings = await this.listOpenableEntries(parent);
-    const taken = new Set(siblings.entries.map(e => e.name.toLowerCase()));
-    let folder = base;
-    for (let i = 2; taken.has(folder.toLowerCase()); i++) {
-      folder = `${base} (${i})`;
-    }
-    const rootPath = joinPath(parent, folder);
-
-    if (!(await this.createProject({ ...bundle.manifest, rootPath }))) {
-      return { ok: false, reason: 'invalid' };
-    }
-    const main = bundle.pipelines?.main;
-    if (main && Array.isArray(main.nodes)) {
-      graph.fromJSON(main);
-    } else {
-      graph.clear();
-    }
-    this.syncWithGraph(graph);
-    await this.savePipeline(graph);
-    this.bus.emit('project:loaded', this.currentProject);
-    return { ok: true, kind: 'package', path: rootPath };
   }
 
   // Auxiliar para reset em testes unitários

@@ -22,9 +22,18 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   CI job now builds and validates the `.deb` on every pull request.
 - Linux install instructions for Debian/Ubuntu in both READMEs and the release
   guide.
+- **Export project** in the Backstage Export screen creates an
+  `<project>.arestrix.zip` archive for backup, transport or sharing. The archive
+  contains the project folder with a top-level folder name, skips runtime
+  (`.arestrix`), Git, builds, dependency caches, databases, model weights,
+  environment files and keys.
 
 ### Changed
 
+- Project folders are now the only save format. The legacy compressed
+  `.arestrix` package was removed from Save As, the Open screen, the file
+  picker and the WebUI file bridge; an old `.arestrix` package can no longer be
+  opened by the Studio.
 - Debian metadata declares `libc6 (>= 2.38)`, `libstdc++6 (>= 13)` and
   `libgcc-s1`, with GTK 3/WebKitGTK 4.1 and a C++ compiler as recommends. The
   builder reads the GLIBC/GLIBCXX symbols referenced by the binaries and

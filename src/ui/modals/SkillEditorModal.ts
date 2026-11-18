@@ -451,10 +451,10 @@ export class SkillEditorModal extends BaseModal {
         } catch (_) {}
       }
 
-      // Fallback para save_arestrix_file
+      // Fallback para save_project_file
       if (!saveSuccess) {
         try {
-          const ok = await (window as any).webui.call('save_arestrix_file', JSON.stringify({
+          const ok = await (window as any).webui.call('save_project_file', JSON.stringify({
             targetPath: this.currentPath,
             content: this.currentContent,
             isBase64: false

@@ -10,6 +10,7 @@
 #include "project/ProjectManager.hpp"
 #include "project/GitSyncService.hpp"
 #include "project/RunnerService.hpp"
+#include "project/ProjectArchive.hpp"
 #include "project/OpenableFiles.hpp"
 #include "libraries/GitHubSource.hpp"
 #include "assistant/AssistantSession.hpp"
@@ -2058,7 +2059,7 @@ void ui_pick_file(webui::window::event* e) {
     }
 }
 
-// Wrapper JS -> C++ (Tela Abrir: subpastas, projetos, pacotes .arestrix e grafos .json de uma pasta).
+// Wrapper JS -> C++ (Tela Abrir: subpastas, projetos e grafos .json de uma pasta).
 // Payload: caminho em UTF-8 (vazio = diretorio atual).
 void ui_list_openable_entries(webui::window::event* e) {
     try {
@@ -2147,8 +2148,8 @@ void ui_list_subdirectories(webui::window::event* e) {
     }
 }
 
-// Wrapper JS -> C++ (Salvar pacote .arestrix em Base64 ou texto). Somente extensoes .arestrix / .json.
-void ui_save_arestrix_file(webui::window::event* e) {
+// Wrapper JS -> C++ (Salvar arquivo do projeto em JSON/Base64. Somente extensao .json).
+void ui_save_project_file(webui::window::event* e) {
     try {
         auto j = taskforge::jsonutil::parse(e->get_string());
         std::string targetPath = j.value("targetPath", "");
@@ -2157,8 +2158,8 @@ void ui_save_arestrix_file(webui::window::event* e) {
 
         std::filesystem::path p = taskforge::project::pathFromUtf8(targetPath);
         std::string ext = p.extension().string();
-        if (targetPath.empty() || (ext != ".arestrix" && ext != ".json")) {
-            std::cerr << "[C++ Erro] save_arestrix_file: extensao nao permitida: " << targetPath << "\n";
+        if (targetPath.empty() || ext != ".json") {
+            std::cerr << "[C++ Erro] save_project_file: extensao nao permitida: " << targetPath << "\n";
             e->return_bool(false);
             return;
         }
@@ -2173,16 +2174,16 @@ void ui_save_arestrix_file(webui::window::event* e) {
             out.write(content.data(), content.size());
         }
         out.close();
-        std::cout << "[C++] Pacote Arestrix gravado: " << targetPath << "\n";
+        std::cout << "[C++] Arquivo de projeto gravado: " << targetPath << "\n";
         e->return_bool(true);
     } catch (const std::exception& ex) {
-        std::cerr << "[C++ Erro] ui_save_arestrix_file: " << ex.what() << "\n";
+        std::cerr << "[C++ Erro] ui_save_project_file: " << ex.what() << "\n";
         e->return_bool(false);
     }
 }
 
-// Wrapper JS -> C++ (Carregar pacote .arestrix). Somente extensoes .arestrix / .json.
-void ui_load_arestrix_file(webui::window::event* e) {
+// Wrapper JS -> C++ (Carregar arquivo do projeto em JSON. Somente extensao .json).
+void ui_read_project_file(webui::window::event* e) {
     try {
         std::string payload = e->get_string();
         std::string filePath = payload;
@@ -2192,7 +2193,7 @@ void ui_load_arestrix_file(webui::window::event* e) {
 
         std::filesystem::path p = taskforge::project::pathFromUtf8(filePath);
         std::string ext = p.extension().string();
-        if (ext != ".arestrix" && ext != ".json") {
+        if (ext != ".json") {
             e->return_string("{\"success\":false,\"error\":\"Extensao nao permitida\"}");
             return;
         }
@@ -2214,8 +2215,32 @@ void ui_load_arestrix_file(webui::window::event* e) {
         resp["filePath"] = taskforge::project::pathToUtf8(p);
         e->return_string(resp.dump());
     } catch (const std::exception& ex) {
-        std::cerr << "[C++ Erro] ui_load_arestrix_file: " << ex.what() << "\n";
+        std::cerr << "[C++ Erro] ui_read_project_file: " << ex.what() << "\n";
         e->return_string("{\"success\":false,\"error\":\"Excecao interna\"}");
+    }
+}
+
+// Wrapper JS -> C++ (Exportar a pasta do projeto como .arestrix.zip para transporte/backup).
+void ui_export_project_zip(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        const auto root = taskforge::project::pathFromUtf8(j.value("rootPath", std::string()));
+        const auto targetDir = taskforge::project::pathFromUtf8(j.value("targetDir", std::string()));
+        const std::string projectName = j.value("projectName", std::string());
+        std::filesystem::path outPath;
+        std::string error;
+        const bool ok = taskforge::project::ProjectArchive::exportProjectZip(
+            root, targetDir, projectName, outPath, error);
+        taskforge::Json res = {
+            {"ok", ok},
+            {"path", taskforge::project::pathToUtf8(outPath)},
+            {"error", error}
+        };
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_export_project_zip: " << ex.what() << "\n";
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
     }
 }
 
@@ -3679,8 +3704,9 @@ int main(int argc, char** argv) {
     win.bind("get_current_working_dir", ui_get_current_working_dir);
     win.bind("list_drives", ui_list_drives);
     win.bind("list_subdirectories", ui_list_subdirectories);
-    win.bind("save_arestrix_file", ui_save_arestrix_file);
-    win.bind("load_arestrix_file", ui_load_arestrix_file);
+    win.bind("save_project_file", ui_save_project_file);
+    win.bind("read_project_file", ui_read_project_file);
+    win.bind("export_project_zip", ui_export_project_zip);
     win.bind("ensure_workspace_directories", ui_ensure_workspace_directories);
     win.bind("write_workspace_asset", ui_write_workspace_asset);
     win.bind("read_workspace_asset", ui_read_workspace_asset);

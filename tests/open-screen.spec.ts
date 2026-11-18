@@ -21,16 +21,16 @@ function base64Of(text: string): string {
 
 describe('Tela Abrir - utilitarios de caminho', () => {
   it('extrai nome, pasta e extensao com barras normais e invertidas', () => {
-    expect(baseName('C:/a/b.arestrix')).toBe('b.arestrix');
+    expect(baseName('C:/a/b.json')).toBe('b.json');
     expect(baseName('C:\\a\\pipelines\\')).toBe('pipelines');
     expect(dirName('C:/a/b')).toBe('C:/a');
     expect(dirName('C:/a')).toBe('C:/');
-    expect(dirName('C:\\a\\b.arestrix')).toBe('C:\\a');
+    expect(dirName('C:\\a\\b.json')).toBe('C:\\a');
     expect(dirName('/home')).toBe('/');
     expect(dirName('solto')).toBe('');
     expect(joinPath('C:/', 'x')).toBe('C:/x');
     expect(joinPath('C:/a', 'x')).toBe('C:/a/x');
-    expect(stripExtension('pacote.arestrix')).toBe('pacote');
+    expect(stripExtension('pacote.json')).toBe('pacote');
     expect(stripExtension('.oculto')).toBe('.oculto');
   });
 
@@ -60,7 +60,7 @@ describe('Tela Abrir - utilitarios de caminho', () => {
   });
 });
 
-describe('Tela Abrir - abrir projetos, pacotes e grafos do disco', () => {
+describe('Tela Abrir - abrir projetos e grafos do disco', () => {
   let bus: EventBus;
   let pm: ProjectManager;
   let graph: Graph;
@@ -96,9 +96,7 @@ describe('Tela Abrir - abrir projetos, pacotes e grafos do disco', () => {
     (globalThis as any).window = originalWindow;
   });
 
-  it('classifica o conteudo: pacote gzip, manifesto, grafo e arquivo desconhecido', async () => {
-    const bundle = pm.exportArestrixBundle(graph);
-    expect((await classifyOpenedFile(await pm.compressArestrixBundle(bundle))).type).toBe('package');
+  it('classifica o conteudo: manifesto, grafo e arquivo desconhecido', async () => {
     const encode = (o: any) => new TextEncoder().encode(JSON.stringify(o));
     expect((await classifyOpenedFile(encode({ projectId: 'p', pipelines: [] }))).type).toBe('manifest');
     expect((await classifyOpenedFile(encode(graphSchema('a')))).type).toBe('graph');
@@ -118,7 +116,7 @@ describe('Tela Abrir - abrir projetos, pacotes e grafos do disco', () => {
     expect(await pm.openFromDisk('C:/Proj/Meu', graph)).toEqual({ ok: true, kind: 'project', path: 'C:/Proj/Meu' });
     expect(await pm.openFromDisk('C:/Proj/Outro/arestrix.project.json', graph)).toMatchObject({ ok: true, kind: 'project' });
     expect(called('load_project')).toEqual(['C:/Proj/Meu', 'C:/Proj/Outro/arestrix.project.json']);
-    expect(called('load_arestrix_file')).toEqual([]);
+    expect(called('read_project_file')).toEqual([]);
   });
 
   it('informa falha quando a pasta nao e um projeto', async () => {
@@ -126,48 +124,15 @@ describe('Tela Abrir - abrir projetos, pacotes e grafos do disco', () => {
     expect(await pm.openFromDisk('C:/Qualquer/Pasta', graph)).toEqual({ ok: false, reason: 'invalid' });
   });
 
-  it('extrai um pacote .arestrix numa pasta nova ao lado dele, sem sobrescrever a existente', async () => {
-    const source = new Graph(new EventBus());
-    source.addNode({ id: 'n1', type: 'agent', label: 'Agente', position: { x: 0, y: 0 }, inputs: [], outputs: [] } as any);
-    const bundle = pm.exportArestrixBundle(source);
-    bundle.manifest = { ...bundle.manifest, projectId: 'pkg-id', name: 'Pacote Teste', rootPath: 'C:/Antigo' };
-    const b64 = uint8ArrayToBase64(await pm.compressArestrixBundle(bundle));
-
-    mockBridge((method) => {
-      switch (method) {
-        case 'load_arestrix_file': return JSON.stringify({ success: true, base64: b64 });
-        case 'list_openable_entries':
-          return JSON.stringify({
-            path: 'C:/Projetos', parent: 'C:/', exists: true, truncated: false,
-            entries: [
-              { name: 'pacote', path: 'C:/Projetos/pacote', kind: 'project' },
-              { name: 'Pacote.arestrix', path: 'C:/Projetos/Pacote.arestrix', kind: 'package' }
-            ]
-          });
-        case 'create_project': return true;
-        case 'save_pipeline': return true;
-      }
-      return '';
-    });
-
-    const res = await pm.openFromDisk('C:/Projetos/Pacote.arestrix', graph);
-    expect(res).toEqual({ ok: true, kind: 'package', path: 'C:/Projetos/Pacote (2)' });
-    expect(called('list_openable_entries')).toEqual(['C:/Projetos']);
-
-    const created = JSON.parse(called('create_project')[0]);
-    expect(created.rootPath).toBe('C:/Projetos/Pacote (2)');
-    expect(created.projectId).toBe('pkg-id');
-    expect(created.name).toBe('Pacote Teste');
-
-    const saved = JSON.parse(called('save_pipeline')[0]);
-    expect(saved.nodes.map((n: any) => n.id)).toEqual(['n1']);
-    expect(graph.getAllNodes().map(n => n.id)).toEqual(['n1']);
-    expect(pm.getCurrentProject().rootPath).toBe('C:/Projetos/Pacote (2)');
+  it('nao trata mais o formato legado .arestrix como pacote', async () => {
+    mockBridge(() => false);
+    expect(await pm.openFromDisk('C:/Antigos/projeto.arestrix', graph)).toEqual({ ok: false, reason: 'invalid' });
+    expect(called('read_project_file')).toEqual([]);
   });
 
   it('um grafo dentro de <projeto>/pipelines abre o projeto inteiro', async () => {
     mockBridge((method, arg) => {
-      if (method === 'load_arestrix_file') return JSON.stringify({ success: true, base64: base64Of(JSON.stringify(graphSchema('g1'))) });
+      if (method === 'read_project_file') return JSON.stringify({ success: true, base64: base64Of(JSON.stringify(graphSchema('g1'))) });
       if (method === 'load_project') return arg === 'C:/Proj/Meu';
       if (method === 'get_current_project') {
         return JSON.stringify({ ...pm.createDefaultManifest(), projectId: 'meu', name: 'Meu', rootPath: 'C:/Proj/Meu' });
@@ -181,7 +146,7 @@ describe('Tela Abrir - abrir projetos, pacotes e grafos do disco', () => {
   });
 
   it('um grafo avulso so substitui o canvas com confirmacao', async () => {
-    mockBridge((method) => (method === 'load_arestrix_file'
+    mockBridge((method) => (method === 'read_project_file'
       ? JSON.stringify({ success: true, base64: base64Of(JSON.stringify(graphSchema('solto'))) })
       : ''));
 
@@ -200,22 +165,20 @@ describe('Tela Abrir - abrir projetos, pacotes e grafos do disco', () => {
   });
 
   it('rejeita arquivos .json que nao sao do Arestrix', async () => {
-    mockBridge((method) => (method === 'load_arestrix_file'
+    mockBridge((method) => (method === 'read_project_file'
       ? JSON.stringify({ success: true, base64: base64Of('{"nome": "planilha"}') })
       : ''));
     expect(await pm.openFromDisk('C:/x/dados.json', graph)).toEqual({ ok: false, reason: 'invalid' });
   });
 
-  it('no navegador sem backend abre pacotes pelos bytes e recusa manifestos', async () => {
-    const source = new Graph(new EventBus());
-    source.addNode({ id: 'b1', type: 'agent', label: 'B', position: { x: 0, y: 0 }, inputs: [], outputs: [] } as any);
-    const gz = await pm.compressArestrixBundle(pm.exportArestrixBundle(source));
+  it('no navegador sem backend abre grafos pelos bytes e recusa manifestos', async () => {
+    const graphBytes = new TextEncoder().encode(JSON.stringify(graphSchema('b1')));
 
     expect(pm.hasNativeBridge()).toBe(false);
     expect((await pm.listOpenableEntries('C:/')).available).toBe(false);
     expect(await pm.pickFile({ title: 'x', filters: [] })).toBe('');
 
-    expect(await pm.openFromBytes(gz, 'p.arestrix', graph)).toMatchObject({ ok: true, kind: 'project' });
+    expect(await pm.openFromBytes(graphBytes, 'grafo.json', graph, { confirmLooseGraph: () => true })).toMatchObject({ ok: true, kind: 'graph' });
     expect(graph.getAllNodes().map(n => n.id)).toEqual(['b1']);
 
     const manifest = new TextEncoder().encode(JSON.stringify({ projectId: 'p', pipelines: [] }));
@@ -241,8 +204,7 @@ describe('Tela Abrir - renderizacao no Backstage', () => {
     available: true,
     entries: [
       { name: 'docs', path: 'C:/Projetos/docs', kind: 'folder', modified: Date.now() },
-      { name: 'Arestrix', path: 'C:/Projetos/Arestrix', kind: 'project', modified: Date.now() },
-      { name: 'backup.arestrix', path: 'C:/Projetos/backup.arestrix', kind: 'package', modified: Date.now() }
+      { name: 'Arestrix', path: 'C:/Projetos/Arestrix', kind: 'project', modified: Date.now() }
     ]
   };
 
@@ -273,7 +235,7 @@ describe('Tela Abrir - renderizacao no Backstage', () => {
     expect(html).toContain('id="btn-open-browse"');
     expect(html).toContain('Este Computador');
     expect(html).toContain('Procurar um projeto ou grafo');
-    expect(html).toContain('accept=".arestrix,.json"');
+    expect(html).toContain('accept=".json"');
     expect(html).toContain('backstage-open-table-header');
     expect(html).toContain('backstage-open-table-row');
     for (const column of [
@@ -305,7 +267,7 @@ describe('Tela Abrir - renderizacao no Backstage', () => {
     }
   });
 
-  it('em Este Computador lista pastas para navegar e projetos ou pacotes para abrir', () => {
+  it('em Este Computador lista pastas para navegar e projetos para abrir', () => {
     const html = renderOpen(view => {
       view.openPlace = 'computer';
       view.openListing = listing;
@@ -314,9 +276,7 @@ describe('Tela Abrir - renderizacao no Backstage', () => {
 
     expect(html).toContain('data-open-action="navigate" data-path="C:/Projetos/docs"');
     expect(html).toContain('data-open-action="disk" data-path="C:/Projetos/Arestrix"');
-    expect(html).toContain('data-open-action="disk" data-path="C:/Projetos/backup.arestrix"');
     expect(html).toContain('Projeto Arestrix');
-    expect(html).toContain('Pacote Arestrix (.arestrix)');
     // So a pasta de projeto tem o botao de entrar sem abrir
     expect(html.match(/class="backstage-open-enter"/g)).toHaveLength(1);
     // Migalhas e unidade ativa

@@ -91,20 +91,21 @@ A página **Informações** resume o projeto ativo em cinco cartões: identifica
 A tela **Abrir** segue o Abrir do Office. Os locais ficam à esquerda e a tabela de arquivos usa as colunas **Nome / Data de modificação / Tipo / Tamanho**, com a busca alinhada à direita.
 
 - **Recentes**: duas abas, **Projetos** (agrupados por Hoje, Ontem, Últimos 7 dias, Últimos 30 dias e Mais antigos) e **Grafos** (os pipelines do projeto atual).
-- **Este Computador**: navega pelas unidades e pastas. Mostra subpastas, pastas de projeto (com `arestrix.project.json`), pacotes `.arestrix` e arquivos `.json`. Clicar numa pasta de projeto abre o projeto; o botão ao lado entra na pasta sem abri-lo.
+- **Este Computador**: navega pelas unidades e pastas. Mostra subpastas, pastas de projeto (com `arestrix.project.json`) e arquivos `.json`. Clicar numa pasta de projeto abre o projeto; o botão ao lado entra na pasta sem abri-lo.
 - **Procurar**: abre o seletor de arquivos do sistema.
 
 ![Tela Abrir no padrão Office](../assets/screenshots/open-screen.webp)
 
-Um pacote `.arestrix` é extraído numa pasta nova ao lado dele (`nome`, `nome (2)`, ...) e aberto como projeto. Um grafo `.json` dentro de `<projeto>/pipelines` abre o projeto inteiro; um grafo avulso só substitui o canvas do projeto atual depois de confirmação.
+Uma pasta de projeto é aberta diretamente. Um grafo `.json` dentro de `<projeto>/pipelines` abre o projeto inteiro; um grafo avulso só substitui o canvas do projeto atual depois de confirmação.
 
 ### Salvar
 
 A tela **Salvar** unifica o salvamento rápido e o *Salvar Como* no estilo do Office:
 
 - À esquerda, permite **Salvar Projeto Atual** diretamente no local existente ou escolher onde salvar via **Este Computador**, **Locais Recentes** ou **Procurar Pasta**.
-- À direita, destaca no topo o seletor de escopo: **Projeto Completo** (pacote `.arestrix` ou pasta estruturada com `arestrix.project.json` + `pipelines/main.json`) ou **Apenas um Grafo do Projeto** (arquivo `.json` do pipeline). Inclui navegação por unidades, pastas e breadcrumbs, atalhos para a raiz e para a pasta `pipelines/` do projeto ativo, além de registro automático do grafo no manifesto quando salvo dentro do projeto aberto.
-- Ícones dos locais, cartões de escopo, campos de nome/formato e botões do rodapé usam o mesmo shell Office do restante do menu Arquivo.
+- À direita, destaca no topo o seletor de escopo: **Projeto Completo** (pasta estruturada com `arestrix.project.json` + `pipelines/main.json`) ou **Apenas um Grafo do Projeto** (arquivo `.json` do pipeline). Inclui navegação por unidades, pastas e breadcrumbs, atalhos para a raiz e para a pasta `pipelines/` do projeto ativo, além de registro automático do grafo no manifesto quando salvo dentro do projeto aberto.
+- A pasta é o único formato de salvamento de projeto. Para backup ou envio, o menu **Exportar** cria um arquivo `.arestrix.zip` com os arquivos do projeto e exclui runtime, builds, bancos, modelos e segredos.
+- Ícones dos locais, cartões de escopo, campos de nome e botões do rodapé usam o mesmo shell Office do restante do menu Arquivo.
 
 ![Página Salvar do menu Arquivo](../assets/screenshots/file-menu-save.webp)
 

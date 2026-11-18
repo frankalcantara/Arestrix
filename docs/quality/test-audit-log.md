@@ -369,7 +369,7 @@ O `doctor` de um projeto que mistura ingestão de fontes com lições e proposta
 | **5. Protocolo MCP & Conectores** | `mcp-protocol.spec.ts`, `mcp-vertex.spec.ts`, `mcp-tool-picker.spec.ts` | 26 | **PASS** |
 | **6. Interface Office 365 & Gerenciador Janelas** | `office-ribbon-interface.spec.ts`, `office-workspace-interface.spec.ts`, `modal-window-manager.spec.ts`, `open-screen.spec.ts`, `assistant-panel.spec.ts`, `global-defaults-modal.spec.ts`, `code-modal-monaco.spec.ts` | 58 | **PASS** |
 | **7. Tipografia Nítida & Internacionalização** | `i18n.spec.ts`, `node-view-typography.spec.ts`, `svg-node-view.spec.ts`, `node-action-tooltips.spec.ts`, `graphviz-export.spec.ts` | 34 | **PASS** |
-| **8. Gestão de Projetos & Sincronização Git** | `project-management.spec.ts`, `project-creation-hash.spec.ts`, `save-as-arestrix.spec.ts`, `git-sync.spec.ts`, `generic-pi-import.spec.ts`, `pi-modal-tabs.spec.ts`, `pi-project-importer.spec.ts`, `examples-valid.spec.ts` | 32 | **PASS** |
+| **8. Gestão de Projetos & Sincronização Git** | `project-management.spec.ts`, `project-creation-hash.spec.ts`, `save-project.spec.ts`, `git-sync.spec.ts`, `generic-pi-import.spec.ts`, `pi-modal-tabs.spec.ts`, `pi-project-importer.spec.ts`, `examples-valid.spec.ts` | 32 | **PASS** |
 | **Total Consolidado** | **42 arquivos de especificação** | **300** | **100% OK** |
 
 #### Verificações Complementares de Segurança & Build
