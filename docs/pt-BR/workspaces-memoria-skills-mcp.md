@@ -24,8 +24,9 @@ Um projeto é descrito por `arestrix.project.json` na sua pasta:
 | `globalDefaults` | Padrões de `model`, `sandbox`, `codeMode` (ferramentas permitidas) e `memory` para os vértices. |
 | `environment` | Variáveis locais ao projeto (`.env`). |
 
-O Studio mantém a lista de projetos recentes e restaura o último ao iniciar. *Salvar Como* gera um pacote
-comprimido `.arestrix`.
+O Studio mantém a lista de projetos recentes e restaura o último ao iniciar. *Salvar Como* grava a pasta
+do projeto. A ação **Exportar projeto** gera um `.arestrix.zip` para backup ou envio, sem runtime,
+builds, bancos, modelos ou segredos.
 
 ### Sincronização Git por projeto (GitHub e repositórios remotos)
 

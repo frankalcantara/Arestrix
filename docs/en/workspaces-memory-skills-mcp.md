@@ -24,8 +24,9 @@ A project is described by `arestrix.project.json` in its folder:
 | `globalDefaults` | Default `model`, `sandbox`, `codeMode` (allowed tools) and `memory` for the vertices. |
 | `environment` | Variables local to the project (`.env`). |
 
-The Studio keeps a list of recent projects and restores the last one on start. *Save As* produces a
-compressed `.arestrix` package.
+The Studio keeps a list of recent projects and restores the last one on start. *Save As* writes the
+project folder. **Export project** creates an `.arestrix.zip` for backup or sharing, without runtime,
+builds, databases, models or secrets.
 
 ### Per-Project Git Repository Synchronization (GitHub & Remotes)
 

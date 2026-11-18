@@ -101,8 +101,7 @@ Json listOpenableEntries(const fs::path& requested, std::size_t limit) {
                 kind = isProjectDirectory(entry.path()) ? "project" : "folder";
             } else if (entry.is_regular_file(entryEc)) {
                 std::string lower = lowerAscii(name);
-                if (lower.ends_with(".arestrix")) kind = "package";
-                else if (lower == "arestrix.project.json" || lower == "taskforge.project.json") kind = "manifest";
+                if (lower == "arestrix.project.json" || lower == "taskforge.project.json") kind = "manifest";
                 else if (lower.ends_with(".json")) kind = "json";
             }
             if (!kind) continue;

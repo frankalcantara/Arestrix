@@ -103,7 +103,7 @@ bool loadPersistedUserEnv();
 // Seletor de pasta nativo; vazio se cancelado/indisponivel.
 std::string pickFolderDialog(const std::string& title);
 
-// Filtro do seletor de arquivo: nome exibido e padroes separados por ';' (ex: "*.arestrix;*.json").
+// Filtro do seletor de arquivo: nome exibido e padroes separados por ';' (ex: "*.json").
 struct FileFilter {
     std::string name;
     std::string pattern;

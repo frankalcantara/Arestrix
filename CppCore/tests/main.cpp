@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <sstream>
@@ -49,6 +50,7 @@
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
+#include "project/ProjectArchive.hpp"
 #include "libraries/GitHubSource.hpp"
 #include "project/GitSyncService.hpp"
 #include "project/MemoryDatabaseGuard.hpp"
@@ -11384,7 +11386,55 @@ TEST(native_calls_are_orders_of_magnitude_faster_than_mcp_over_a_process) {
     fs::remove_all(root);
 }
 
-TEST(open_screen_lists_folders_projects_packages_and_graphs) {
+TEST(project_archive_exports_project_folder_as_zip) {
+    namespace prj = taskforge::project;
+    auto root = makeTempDir("project-zip-source");
+    auto target = makeTempDir("project-zip-target");
+    fs::create_directories(root / "pipelines");
+    fs::create_directories(root / ".arestrix");
+    fs::create_directories(root / ".git");
+    { std::ofstream(root / "arestrix.project.json") << "{\"name\":\"Meu Projeto\"}"; }
+    { std::ofstream(root / "pipelines" / "main.json") << "{\"nodes\":[]}"; }
+    { std::ofstream(root / ".arestrix" / "secret.txt") << "runtime"; }
+    { std::ofstream(root / ".git" / "config") << "git"; }
+    { std::ofstream(root / ".env") << "TOKEN=nao-exportar"; }
+    { std::ofstream(root / "backup.arestrix.zip") << "zip antigo"; }
+
+    fs::path out;
+    std::string error;
+    CHECK(prj::ProjectArchive::exportProjectZip(root, target, "Meu Projeto", out, error));
+    CHECK(error.empty());
+    CHECK(fs::exists(out));
+    CHECK(out.filename().string() == "Meu Projeto.arestrix.zip");
+
+    std::ifstream in(out, std::ios::binary);
+    std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    CHECK(bytes.compare(0, 4, "PK\x03\x04") == 0);
+    CHECK(bytes.find("Meu Projeto/arestrix.project.json") != std::string::npos);
+    CHECK(bytes.find("Meu Projeto/pipelines/main.json") != std::string::npos);
+    CHECK(bytes.find(".arestrix/secret.txt") == std::string::npos);
+    CHECK(bytes.find(".git/config") == std::string::npos);
+    CHECK(bytes.find(".env") == std::string::npos);
+    CHECK(bytes.find("backup.arestrix.zip") == std::string::npos);
+
+    fs::path out2;
+    CHECK(prj::ProjectArchive::exportProjectZip(root, target, "Meu Projeto", out2, error));
+    CHECK(out2 != out);
+    CHECK(out2.filename().string() == "Meu Projeto (2).arestrix.zip");
+
+    fs::create_directories(root / "sem-manifesto");
+    fs::path invalidOut;
+    std::string invalidError;
+    CHECK(!prj::ProjectArchive::exportProjectZip(
+        root / "sem-manifesto", target, "Sem Manifesto", invalidOut, invalidError));
+    CHECK(!invalidError.empty());
+
+    fs::remove_all(root);
+    fs::remove_all(target);
+}
+
+TEST(open_screen_lists_folders_projects_and_graphs) {
     namespace prj = taskforge::project;
     auto root = makeTempDir("open-list");
     fs::create_directories(root / "zeta-pasta");
@@ -11392,9 +11442,9 @@ TEST(open_screen_lists_folders_projects_packages_and_graphs) {
     { std::ofstream(root / "Alfa-projeto" / "arestrix.project.json") << "{}"; }
     fs::create_directories(root / prj::pathFromUtf8("Programação"));
     fs::create_directories(root / ".oculta");
-    { std::ofstream(root / "pacote.arestrix") << "x"; }
     { std::ofstream(root / "grafo.json") << "{}"; }
     { std::ofstream(root / "arestrix.project.json") << "{}"; }
+    { std::ofstream(root / "legacy.arestrix") << "x"; }
     { std::ofstream(root / "notas.txt") << "x"; }
 
     auto listing = prj::listOpenableEntries(root);
@@ -11413,8 +11463,8 @@ TEST(open_screen_lists_folders_projects_packages_and_graphs) {
         if (e.value("name", std::string()) == "Programação") accentedPath = e.value("path", std::string());
     }
     CHECK((names == std::vector<std::string>{"Alfa-projeto", "Programação", "zeta-pasta",
-                                             "arestrix.project.json", "grafo.json", "pacote.arestrix"}));
-    CHECK((kinds == std::vector<std::string>{"project", "folder", "folder", "manifest", "json", "package"}));
+                                             "arestrix.project.json", "grafo.json"}));
+    CHECK((kinds == std::vector<std::string>{"project", "folder", "folder", "manifest", "json"}));
     CHECK(prj::isProjectDirectory(root / "Alfa-projeto"));
     CHECK(!prj::isProjectDirectory(root / "zeta-pasta"));
 
