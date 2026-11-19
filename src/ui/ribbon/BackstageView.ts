@@ -59,7 +59,7 @@ export class BackstageView {
   private projectManager: ProjectManager;
   private codeModal: CodeModal;
   private propertiesController: PropertiesController;
-  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' | 'properties' | 'library' = 'info';
+  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'properties' | 'library' = 'info';
 
   // Estado do dropdown único da tela Informações (Identificação + Arquivos + Grafo e Pipelines)
   private infoDropdownOpen = false;
@@ -224,7 +224,7 @@ export class BackstageView {
   }
 
   public async open(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' | 'properties' | 'library' = 'info'): Promise<void> {
-    this.activeSection = section === 'save' ? 'saveas' : section;
+    this.activeSection = section === 'save' ? 'saveas' : section === 'options' ? 'properties' : section;
     try {
       if (this.activeSection !== 'properties') {
         await this.projectManager.init(true);
@@ -315,9 +315,6 @@ export class BackstageView {
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'properties' ? 'active' : ''}" data-section="properties">
               <span class="backstage-nav-svg">${ribbonIcon('settings', 18)}</span> ${t('properties_window.hub.nav', 'Propriedades')}
-            </li>
-            <li class="backstage-nav-item ${this.activeSection === 'options' ? 'active' : ''}" data-section="options">
-              <span>⚙️</span> ${t('backstage.sidebar.options')}
             </li>
           </ul>
         </div>
@@ -1103,7 +1100,7 @@ export class BackstageView {
               </div>
               <h3>${t('properties_window.scope.studio_title', 'Propriedades do Studio')}</h3>
               <p>${t('properties_window.hub.studio_desc', 'Preferências globais, credenciais, gateway, modelo padrão e integrações desta instalação.')}</p>
-              <button type="button" class="btn btn-primary-office" data-open-properties="studio">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
+              <button type="button" class="btn btn-primary-office" id="btn-options-studio-properties" data-open-properties="studio" data-properties-section="general">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
             </div>
             <div class="backstage-info-card properties-hub-card">
               <div class="properties-hub-card-heading">
@@ -1112,7 +1109,7 @@ export class BackstageView {
               </div>
               <h3>${t('properties_window.scope.workspace_title', 'Propriedades do Workspace')}</h3>
               <p>${t('properties_window.hub.workspace_desc', 'Pastas, catálogos aprovados, governança, sandbox padrão e memória compartilhada.')}</p>
-              <button type="button" class="btn btn-primary-office" data-open-properties="workspace">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
+              <button type="button" class="btn btn-primary-office" id="btn-options-workspace-properties" data-open-properties="workspace" data-properties-section="general">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
             </div>
             <div class="backstage-info-card properties-hub-card">
               <div class="properties-hub-card-heading">
@@ -1124,38 +1121,18 @@ export class BackstageView {
               <button type="button" class="btn btn-primary-office" data-open-properties="project">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
             </div>
           </div>
-        `;
-      }
-      case 'options': {
-        return `
-          <h2 class="backstage-header-title">${t('backstage.options.title')}</h2>
-          <p class="backstage-header-sub">${t('backstage.options.subtitle')}</p>
-
-          <div class="backstage-cards-grid">
-            <article class="backstage-info-card">
-              <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('settings', 18)}</span><span class="backstage-card-title-text">${t('properties_window.scope.studio_title', 'Propriedades do Studio')}</span></h4>
-              <p>${t('properties_window.hub.studio_desc', 'Preferências globais, credenciais, gateway, modelo padrão e integrações desta instalação.')}</p>
-              <button type="button" class="btn btn-primary-office" id="btn-options-studio-properties" data-open-properties="studio" data-properties-section="general">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
-            </article>
-
-            <article class="backstage-info-card">
-              <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('folder', 18)}</span><span class="backstage-card-title-text">${t('properties_window.scope.workspace_title', 'Propriedades do Workspace')}</span></h4>
-              <p>${t('properties_window.hub.workspace_desc', 'Pastas, catálogos aprovados, governança, sandbox padrão e memória compartilhada.')}</p>
-              <button type="button" class="btn btn-primary-office" id="btn-options-workspace-properties" data-open-properties="workspace" data-properties-section="general">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
-            </article>
-
-            <article class="backstage-info-card">
-              <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('catalog', 18)}</span><span class="backstage-card-title-text">${t('backstage.options.preapproved_cat_title')}</span></h4>
-              <p>${t('backstage.options.catalogs_moved', 'Pastas, skills e servidores MCP aprovados agora são gerenciados nas Propriedades do Workspace.')}</p>
-              <button type="button" class="btn btn-secondary-office" data-open-properties="workspace" data-properties-section="catalogs">${t('backstage.options.open_catalogs', 'Abrir catálogos')}</button>
-            </article>
-          </div>
 
           <div class="backstage-recents-section">
             <h3 class="backstage-header-title backstage-inline-title" style="font-size: 16px; margin-bottom: 4px;"><span class="backstage-section-icon">${ribbonIcon('bolt', 18)}</span>${t('backstage.options.integrated_exec_title')}</h3>
             <p class="backstage-header-sub" style="margin-bottom: 14px;">${t('backstage.options.integrated_exec_sub')}</p>
 
             <div class="backstage-cards-grid">
+              <article class="backstage-info-card">
+                <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('catalog', 18)}</span><span class="backstage-card-title-text">${t('backstage.options.preapproved_cat_title')}</span></h4>
+                <p>${t('backstage.options.catalogs_moved', 'Pastas, skills e servidores MCP aprovados agora são gerenciados nas Propriedades do Workspace.')}</p>
+                <button type="button" class="btn btn-secondary-office" data-open-properties="workspace" data-properties-section="catalogs">${t('backstage.options.open_catalogs', 'Abrir catálogos')}</button>
+              </article>
+
               <div class="backstage-info-card">
                 <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('shield', 18)}</span><span class="backstage-card-title-text">${t('backstage.options.auditor_title')}</span></h4>
                 <p>${t('backstage.options.auditor_desc')}</p>

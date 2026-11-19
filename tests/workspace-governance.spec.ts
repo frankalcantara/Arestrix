@@ -449,8 +449,8 @@ describe('Workspace Governance, Execution & Pre-Approved Catalogs', () => {
     });
   });
 
-  describe('5. BackstageView - Seção Opções do Studio', () => {
-    it('deve possuir o item de navegação data-section="options" na barra lateral', () => {
+  describe('5. BackstageView - Seção Unificada Propriedades & Opções', () => {
+    it('deve possuir apenas o item de navegação data-section="properties" sem entrada duplicada de options', () => {
       const graph = new Graph();
       const codeModal = new CodeModal();
       const defaultsModal = new GlobalDefaultsModal(bus);
@@ -458,24 +458,25 @@ describe('Workspace Governance, Execution & Pre-Approved Catalogs', () => {
 
       backstage.open();
       const overlay = backstage.getOverlay()!;
-      expect(overlay.innerHTML).toContain('data-section="options"');
-      expect(overlay.innerHTML).toContain('Opções do Studio');
+      expect(overlay.innerHTML).toContain('data-section="properties"');
+      expect(overlay.innerHTML).toContain('Propriedades');
+      expect(overlay.innerHTML).not.toContain('data-section="options"');
       backstage.close();
     });
 
-    it('deve renderizar os diretórios do workspace e botões de execução ao selecionar a seção options', () => {
+    it('deve reunir os escopos de Propriedades e os controles de execução/catálogos na seção properties', () => {
       const graph = new Graph();
       const codeModal = new CodeModal();
       const defaultsModal = new GlobalDefaultsModal(bus);
       const backstage = new BackstageView(graph, codeModal, defaultsModal);
 
-      (backstage as any).activeSection = 'options';
+      (backstage as any).activeSection = 'properties';
       (backstage as any).render();
 
       const overlay = backstage.getOverlay()!;
-      expect(overlay.innerHTML).toContain('Opções do Studio & Governança do Workspace');
       expect(overlay.innerHTML).toContain('Propriedades do Studio');
       expect(overlay.innerHTML).toContain('Propriedades do Workspace');
+      expect(overlay.innerHTML).toContain('Propriedades do Projeto');
       expect(overlay.innerHTML).toContain('Abrir catálogos');
       expect(overlay.innerHTML).toContain('btn-run-workspace-auditor');
       expect(overlay.innerHTML).toContain('btn-run-workspace-linter');

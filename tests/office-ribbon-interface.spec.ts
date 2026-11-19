@@ -518,12 +518,14 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(backstage.isOpen()).toBe(true);
     });
 
-    it('deve encaminhar idioma e governança das Opções para as Propriedades', async () => {
+    it('deve direcionar chamadas legadas de options para a página unificada de Propriedades sem duplicação', async () => {
       await ribbon.openBackstage('options');
       const backstage = ribbon.getBackstageView();
       expect(backstage.isOpen()).toBe(true);
+      expect((backstage as any).activeSection).toBe('properties');
 
       const overlay = backstage.getOverlay();
+      expect(overlay?.innerHTML).not.toContain('data-section="options"');
       const studioBtn = overlay?.querySelector('#btn-options-studio-properties') as any;
       expect(studioBtn).toBeDefined();
       expect(studioBtn?.getAttribute('data-open-properties')).toBe('studio');
@@ -535,6 +537,7 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(workspaceBtn?.getAttribute('data-properties-section')).toBe('general');
 
       const html = overlay?.innerHTML || '';
+      expect(html).toContain('btn-run-workspace-auditor');
       expect(html).not.toContain('backstage-language-select');
     });
 
