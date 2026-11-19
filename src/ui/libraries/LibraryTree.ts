@@ -6,15 +6,18 @@ import { LibraryService } from '../../core/libraries/LibraryService.ts';
 import type { ILibraryAsset, ILibraryEntry, LibraryAssetKind, LibraryAuditVerdict, LibraryScope } from '../../core/libraries/types.ts';
 import type { INodeData, IPort } from '../../core/types.ts';
 import { t } from '../../i18n/index.ts';
+import { LibraryAssetEditorModal } from '../modals/LibraryAssetEditorModal.ts';
 
 export interface ILibraryBrowserOptions {
   registry: LibraryRegistry;
-  /** Grafo ativo: usado por "Inserir asset" e "Editar" para criar vértices. */
+  /** Grafo ativo: usado por "Inserir asset" para criar vértices. */
   graph?: Graph;
   /** Quando omitido, o navegador lista as bibliotecas de todos os escopos. */
   scope?: LibraryScope;
   /** Callback para fechar a Biblioteca / Backstage e retornar à tela principal do Studio. */
   onReturnToStudio?: () => void;
+  /** Instância opcional do modal de edição de ativos (útil em testes). */
+  assetEditorModal?: LibraryAssetEditorModal;
 }
 
 interface ILibraryBrowserState {
@@ -1348,33 +1351,19 @@ export function buildEditableNodeFromAsset(
   };
 }
 
-function openSkillAssetEditor(
-  service: LibraryService,
-  asset: ILibraryAsset,
-  rerender: () => void
-): void {
-  if (asset.payload.kind !== 'skill') return;
-  const payload = asset.payload;
-  globalEventBus.emit('node:open-skill-editor', {
-    path: `.workspace/library-edits/${asset.id}/SKILL.md`,
-    initialContent: payload.markdownContent,
-    nodeLabel: asset.name,
-    onSave: (_path: string, content: string) => {
-      void service.updateDerivedAsset(asset.id, {
-        kind: 'skill',
-        markdownContent: content,
-        systemPrompt: payload.systemPrompt,
-        tools: [...payload.tools]
-      }).then(result => {
-        if (result.ok) {
-          notify('success', lbl('msg_edited', 'Ativo atualizado.'));
-        } else {
-          notify('warning', result.reason || lbl('msg_edit_failed', 'Não foi possível atualizar o ativo.'));
-        }
-        rerender();
-      });
-    }
-  });
+let sharedAssetEditorModal: LibraryAssetEditorModal | null = null;
+
+function getAssetEditorModal(options: ILibraryBrowserOptions): LibraryAssetEditorModal {
+  if (options.assetEditorModal) return options.assetEditorModal;
+  if (!sharedAssetEditorModal) {
+    sharedAssetEditorModal = new LibraryAssetEditorModal();
+  }
+  return sharedAssetEditorModal;
+}
+
+export function resetLibraryAssetEditorModalForTesting(): void {
+  sharedAssetEditorModal?.destroy();
+  sharedAssetEditorModal = null;
 }
 
 /**
@@ -1429,9 +1418,10 @@ export async function ensureCopyInOwnLibrary(
 }
 
 /**
- * "Editar" mantém o asset original imutável: copia primeiro para Minha
- * biblioteca (quando ainda não estiver lá), abre o editor próprio do tipo do
- * ativo e, para vértices, insere a cópia editável no grafo antes de abrir o modal.
+ * "Editar" abre o modal Office de edição de ativo diretamente sobre a tela
+ * "Arquivo > Biblioteca de Ativos" sem fechar o Backstage e sem inserir vértices
+ * no grafo. Ativos da Biblioteca Arestrix (ou somente leitura) permanecem intactos:
+ * a cópia em "Minha biblioteca" só é criada/atualizada quando o usuário salva.
  */
 async function editLibraryAsset(
   service: LibraryService,
@@ -1445,54 +1435,60 @@ async function editLibraryAsset(
     notify('error', lbl('msg_edit_failed', 'Não foi possível atualizar o ativo.'));
     return;
   }
-  const isVertex = source.payload.kind === 'agent-template' || source.payload.kind === 'pipeline';
-  if (isVertex && !options.graph) {
-    notify('warning', lbl('msg_edit_no_graph', 'Abra um projeto para criar o vértice editável.'));
-    return;
-  }
 
-  const editable = await ensureCopyInOwnLibrary(service, options, state, source, rerender);
-  if (!editable) return;
+  const sourceLibrary = options.registry.get(source.libraryId);
+  const isBuiltinSource = source.libraryId === 'library-arestrix' || Boolean(sourceLibrary?.isBuiltin);
+  const isReadOnlySource = isBuiltinSource || (!source.derivedFrom && source.provenance?.authority !== 'user');
 
-  if (editable.payload.kind === 'skill') {
-    openSkillAssetEditor(service, editable, rerender);
-    return;
-  }
-  if (editable.payload.kind === 'mcp') {
-    if (options.graph) {
-      await service.installAsset(editable.id, { allowCaution: true });
-      const baseName = source.name.replace(/\s*\(c[oó]pia\)$/i, '').trim() || source.name;
-      const node = buildEditableNodeFromAsset(editable, options.graph, baseName);
-      if (node) {
-        options.graph.commandManager.execute(new AddNodeCommand(options.graph, node));
-        globalEventBus.emit('node:selected', node);
-        options.onReturnToStudio?.();
-        notify('success', lbl('msg_edit_vertex', 'Vértice MCP editável "{{label}}" criado no grafo.')
-          .replace('{{label}}', node.label));
-        return;
-      }
+  let assetToOpen = source;
+  let libraryName = sourceLibrary?.name || '';
+  let suggestedName: string | undefined;
+
+  if (isReadOnlySource) {
+    const ownLibrary = options.registry.list('workspace').find(lib => lib.name === 'Minha biblioteca');
+    const existingCopy = ownLibrary
+      ? options.registry.listAssets(ownLibrary.id).find(candidate =>
+          candidate.derivedFrom?.libraryId === source.libraryId &&
+          candidate.derivedFrom?.assetId === source.id
+        )
+      : undefined;
+    if (existingCopy) {
+      assetToOpen = existingCopy;
+      libraryName = ownLibrary?.name || libraryName;
+    } else {
+      suggestedName = `${source.name} (cópia)`;
     }
-    notify('info', lbl('msg_edit_mcp',
-      'Cópia criada em Minha biblioteca. Edite o servidor MCP em Workspace > Servidores MCP.'));
-    return;
-  }
-  if (!isVertex || !options.graph) {
-    notify('info', lbl('msg_edited', 'Ativo atualizado.'));
-    return;
   }
 
-  const baseName = source.name.replace(/\s*\(c[oó]pia\)$/i, '').trim() || source.name;
-  const node = buildEditableNodeFromAsset(editable, options.graph, baseName);
-  if (!node) {
-    notify('error', lbl('msg_edit_failed', 'Não foi possível atualizar o ativo.'));
-    return;
-  }
-  options.graph.commandManager.execute(new AddNodeCommand(options.graph, node));
-  globalEventBus.emit('node:selected', node);
-  options.onReturnToStudio?.();
-  globalEventBus.emit('node:open-model-modal', { nodeId: node.id, tab: 'prompt' });
-  notify('success', lbl('msg_edit_vertex', 'Vértice editável "{{label}}" criado no grafo.')
-    .replace('{{label}}', node.label));
+  const modal = getAssetEditorModal(options);
+  modal.openAsset({
+    asset: assetToOpen,
+    libraryName,
+    isReadOnlySource,
+    suggestedName,
+    onSave: async ({ metadata, payload }) => {
+      const target = isReadOnlySource
+        ? await ensureCopyInOwnLibrary(service, options, state, source, rerender)
+        : source;
+      if (!target) {
+        return { ok: false, reason: lbl('msg_derive_failed', 'Não foi possível copiar o ativo para Minha biblioteca.') };
+      }
+
+      const result = await service.updateDerivedAsset(target.id, payload, metadata);
+      if (!result.ok || !result.asset) {
+        return { ok: false, reason: result.reason || lbl('msg_edit_failed', 'Não foi possível atualizar o ativo.') };
+      }
+
+      state.selectedLibraryId = result.asset.libraryId;
+      state.selectedAssetId = result.asset.id;
+      state.expandedLibraries.add(result.asset.libraryId);
+      state.expandedGroups.add(groupKey(result.asset.libraryId, assetDomain(result.asset)));
+      state.expandedGroups.add(groupKey(result.asset.libraryId, assetDomain(result.asset), assetSubdomain(result.asset)));
+      notify('success', lbl('msg_edited', 'Ativo atualizado.'));
+      rerender();
+      return { ok: true };
+    }
+  });
 }
 
 async function handleLibraryAction(

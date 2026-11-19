@@ -392,32 +392,86 @@ export class LibraryService {
   }
 
   /**
-   * Atualiza o conteúdo de um derivado. Assets de biblioteca são imutáveis:
+   * Atualiza o conteúdo e os metadados de um asset derivado ou criado pelo usuário
+   * em biblioteca local editável. Assets de biblioteca embutida ou externa são imutáveis:
    * para editar um asset original, use `deriveAsset` primeiro.
    */
   public async updateDerivedAsset(
     assetId: string,
-    payloadPatch: Partial<ILibraryAssetPayload>
+    payloadPatch: Partial<ILibraryAssetPayload>,
+    metadataPatch?: Partial<Pick<ILibraryAsset, 'name' | 'description' | 'domain' | 'subdomain' | 'category' | 'version' | 'license' | 'changelog'>>
   ): Promise<{ ok: boolean; asset?: ILibraryAsset; reason?: string }> {
     const current = this.registry.getAsset(assetId);
     if (!current) return { ok: false, reason: 'Asset não encontrado.' };
     if (current.libraryId === 'library-arestrix' || this.registry.get(current.libraryId)?.isBuiltin) {
       return { ok: false, reason: 'Ativos da Biblioteca Arestrix são imutáveis. Copie para Minha biblioteca antes de editar.' };
     }
-    if (!current.derivedFrom) {
+    if (!current.derivedFrom && current.provenance?.authority !== 'user') {
       return { ok: false, reason: 'Assets de biblioteca são imutáveis. Crie um derivado para editar.' };
     }
 
+    const nextName = metadataPatch?.name?.trim() || current.name;
+    const nextDescription = metadataPatch?.description !== undefined ? metadataPatch.description.trim() : current.description;
+    const nextDomain = metadataPatch?.domain !== undefined ? (metadataPatch.domain.trim() || undefined) : current.domain;
+    const nextSubdomain = metadataPatch?.subdomain !== undefined ? (metadataPatch.subdomain.trim() || undefined) : current.subdomain;
+    const nextCategory = metadataPatch?.category !== undefined ? (metadataPatch.category.trim() || current.category) : current.category;
+    const nextVersion = metadataPatch?.version !== undefined ? (metadataPatch.version.trim() || current.version) : current.version;
+    const nextLicense = metadataPatch?.license !== undefined
+      ? (normalizeLicense(metadataPatch.license.trim()) !== 'NOASSERTION' ? normalizeLicense(metadataPatch.license.trim()) : metadataPatch.license.trim() || current.license)
+      : current.license;
+    const nextChangelog = metadataPatch?.changelog !== undefined ? (metadataPatch.changelog.trim() || undefined) : current.changelog;
+
     const payload = this.mergePayload(current.payload, payloadPatch);
-    const audit = this.auditPayload(current.id, current.name, current, payload);
+    if (payload.kind === 'mcp') {
+      if (payload.env) payload.env = sanitizeEnvReferences(payload.env);
+      if (payload.headers) payload.headers = sanitizeEnvReferences(payload.headers);
+    } else if (payload.kind === 'agent-template' || payload.kind === 'pipeline') {
+      payload.template.name = nextName;
+      payload.template.description = nextDescription;
+      payload.template.category = nextCategory;
+      payload.template.domain = nextDomain;
+      payload.template.subdomain = nextSubdomain;
+      payload.template.version = nextVersion;
+    }
+
+    const candidate: ILibraryAsset = {
+      ...current,
+      name: nextName,
+      description: nextDescription,
+      domain: nextDomain,
+      subdomain: nextSubdomain,
+      category: nextCategory,
+      version: nextVersion,
+      license: nextLicense,
+      changelog: nextChangelog,
+      payload
+    };
+
+    const audit = this.auditPayload(current.id, nextName, candidate, payload);
     const decision = this.gate.canInstall(audit, { allowCaution: true, strict: false });
     if (!decision.ok) return { ok: false, reason: decision.reason };
 
+    const now = new Date().toISOString();
+    const contentChanged = audit.hash !== current.audit.hash || nextVersion !== current.version;
+    let history = current.history ? [...current.history] : undefined;
+    if (contentChanged) {
+      const previous = history || [];
+      if (!previous.some(release => release.version === current.version && release.hash === current.audit.hash)) {
+        previous.push({
+          version: current.version,
+          hash: current.audit.hash,
+          at: current.updatedAt,
+          note: current.changelog
+        });
+      }
+      history = [...previous, { version: nextVersion, hash: audit.hash, at: now, note: nextChangelog || 'Atualização via editor de ativo.' }];
+    }
+
     const updated: ILibraryAsset = {
-      ...current,
-      payload,
+      ...candidate,
       audit,
-      updatedAt: new Date().toISOString()
+      history,
+      updatedAt: now
     };
     const saved = this.registry.upsertAsset(updated);
     if (!saved) return { ok: false, reason: 'Não foi possível salvar o derivado.' };

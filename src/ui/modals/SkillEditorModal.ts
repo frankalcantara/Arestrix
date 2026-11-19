@@ -21,7 +21,9 @@ export interface ISkillEditorOpenOptions {
   initialContent?: string;
   nodeId?: string;
   nodeLabel?: string;
+  subtitle?: string;
   readOnly?: boolean;
+  skipDiskWrite?: boolean;
   onSave?: (savedPath: string, content: string) => void;
 }
 
@@ -55,6 +57,7 @@ export class SkillEditorModal extends BaseModal {
   private initialLoadedContent: string = '';
   private isDirty: boolean = false;
   private isReadOnly: boolean = false;
+  private skipDiskWrite: boolean = false;
   private viewMode: 'split' | 'editor' | 'preview' = 'split';
   private saveCallback?: (path: string, content: string) => void;
   private graph?: Graph;
@@ -79,7 +82,7 @@ export class SkillEditorModal extends BaseModal {
 
   private setupGlobalShortcuts(): void {
     this.boundGlobalKeyDown = (e: KeyboardEvent) => {
-      if (this.isOpen && (e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+      if (this.isOpen && BaseModal.isTopMost(this) && (e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         e.stopPropagation();
         if (!this.isReadOnly) {
@@ -99,17 +102,25 @@ export class SkillEditorModal extends BaseModal {
     this.initialLoadedContent = this.currentContent;
     this.isDirty = false;
     this.isReadOnly = options.readOnly === true;
+    this.skipDiskWrite = options.skipDiskWrite === true;
     this.saveCallback = options.onSave;
 
-    const subtitleText = options.nodeLabel
-      ? t('skill_editor.vertex_prefix', 'Vértice: {{label}} · {{path}}', { label: options.nodeLabel, path: this.currentPath })
-      : this.currentPath;
+    const subtitleText = options.subtitle
+      ? options.subtitle
+      : options.nodeLabel
+        ? t('skill_editor.vertex_prefix', 'Vértice: {{label}} · {{path}}', { label: options.nodeLabel, path: this.currentPath })
+        : this.currentPath;
 
     this.config.subtitle = subtitleText;
 
     // Se o conteúdo estiver vazio e o arquivo existir ou tivermos backend, tenta ler
     if (!this.currentContent) {
-      this.loadContentFromBackend(this.currentPath);
+      if (this.skipDiskWrite) {
+        this.currentContent = DEFAULT_SKILL_TEMPLATE;
+        this.initialLoadedContent = DEFAULT_SKILL_TEMPLATE;
+      } else {
+        this.loadContentFromBackend(this.currentPath);
+      }
     }
 
     super.open();
@@ -421,8 +432,10 @@ export class SkillEditorModal extends BaseModal {
 
     let saveSuccess = false;
 
-    // 1. Persistência via backend C++ WebUI se disponível
-    if (typeof window !== 'undefined' && (window as any).webui?.call) {
+    // 1. Persistência via backend C++ WebUI se disponível (exceto em edição em rascunho de biblioteca)
+    if (this.skipDiskWrite) {
+      saveSuccess = true;
+    } else if (typeof window !== 'undefined' && (window as any).webui?.call) {
       const payload = JSON.stringify({
         path: this.currentPath,
         filePath: this.currentPath,

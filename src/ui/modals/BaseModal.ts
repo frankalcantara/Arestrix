@@ -37,6 +37,8 @@ export interface IBaseModalConfig {
 }
 
 export abstract class BaseModal {
+  private static openStack: BaseModal[] = [];
+
   protected overlay: HTMLElement;
   protected dialog: HTMLElement;
   protected windowController?: IModalWindowController;
@@ -44,6 +46,24 @@ export abstract class BaseModal {
   protected isOpen: boolean = false;
   protected tabs: IModalTabDefinition[] = [];
   protected activeTabId: string = '';
+  private boundEscapeHandler?: (e: KeyboardEvent) => void;
+
+  protected static isTopMost(modal: BaseModal): boolean {
+    const stack = BaseModal.openStack;
+    return stack.length === 0 || stack[stack.length - 1] === modal;
+  }
+
+  private static pushToStack(modal: BaseModal): void {
+    BaseModal.removeFromStack(modal);
+    BaseModal.openStack.push(modal);
+  }
+
+  private static removeFromStack(modal: BaseModal): void {
+    const idx = BaseModal.openStack.indexOf(modal);
+    if (idx !== -1) {
+      BaseModal.openStack.splice(idx, 1);
+    }
+  }
 
   constructor(config: IBaseModalConfig) {
     this.config = {
@@ -92,11 +112,13 @@ export abstract class BaseModal {
     }
 
     if (this.config.closeOnEscape && typeof window !== 'undefined') {
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && this.isOpen) {
+      this.boundEscapeHandler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && this.isOpen && BaseModal.isTopMost(this)) {
+          e.stopImmediatePropagation?.();
           this.hide();
         }
-      });
+      };
+      window.addEventListener('keydown', this.boundEscapeHandler);
     }
   }
 
@@ -307,16 +329,22 @@ export abstract class BaseModal {
     }
   }
 
+  public isModalOpen(): boolean {
+    return this.isOpen;
+  }
+
   public open(..._args: any[]): void {
     this.render();
     this.overlay.classList.remove('hidden');
     this.isOpen = true;
+    BaseModal.pushToStack(this);
     this.windowController?.bringToFront();
   }
 
   public hide(): void {
     this.overlay.classList.add('hidden');
     this.isOpen = false;
+    BaseModal.removeFromStack(this);
   }
 
   public getController(): IModalWindowController | undefined {
@@ -324,6 +352,11 @@ export abstract class BaseModal {
   }
 
   public destroy(): void {
+    BaseModal.removeFromStack(this);
+    if (this.boundEscapeHandler && typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.boundEscapeHandler);
+      this.boundEscapeHandler = undefined;
+    }
     this.windowController?.destroy();
     if (this.overlay && this.overlay.parentNode) {
       this.overlay.parentNode.removeChild(this.overlay);
