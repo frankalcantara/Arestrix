@@ -1050,6 +1050,14 @@ const Json* LibraryCatalog::findLibrary(const std::string& libraryId) const {
     return &libraries_[it->second];
 }
 
+bool LibraryCatalog::isBuiltinAsset(const Json& asset) const {
+    if (!asset.is_object()) return false;
+    const std::string libId = asset.value("libraryId", std::string());
+    if (libId == "library-arestrix") return true;
+    const Json* lib = findLibrary(libId);
+    return lib && lib->value("isBuiltin", false);
+}
+
 Json* LibraryCatalog::mutableAsset(const std::string& assetId) {
     auto it = assetIndex_.find(assetId);
     if (it == assetIndex_.end()) return nullptr;
@@ -1675,10 +1683,12 @@ Json LibraryCatalog::installAsset(const std::string& assetId, bool allowCaution,
         writeFileAtomic(ledgerPath, ledger.dump(2), ledgerErr);
     }
 
-    (*asset)["status"] = "installed";
-    (*asset)["updatedAt"] = nowIso();
-    if (!saveState(error)) return Json{{"ok", false}, {"reason", error}};
-    reindex();
+    if (!isBuiltinAsset(*asset)) {
+        (*asset)["status"] = "installed";
+        (*asset)["updatedAt"] = nowIso();
+        if (!saveState(error)) return Json{{"ok", false}, {"reason", error}};
+        reindex();
+    }
     Json result{{"ok", true}, {"asset_id", assetId}, {"kind", kind}, {"path", installedPath.string()}, {"status", "installed"}};
     if (kind == "mcp") {
         const Json& payload = asset->at("payload");
@@ -1714,8 +1724,13 @@ Json LibraryCatalog::deriveAsset(const std::string& assetId, const std::string& 
 
     std::string targetLibraryId = libraryId;
     if (!targetLibraryId.empty()) {
-        if (!findLibrary(targetLibraryId)) {
+        const Json* targetLib = findLibrary(targetLibraryId);
+        if (!targetLib) {
             error = "Biblioteca de destino nao encontrada: " + targetLibraryId;
+            return Json{{"ok", false}, {"reason", error}};
+        }
+        if (targetLibraryId == "library-arestrix" || targetLib->value("isBuiltin", false)) {
+            error = "A Biblioteca Arestrix e somente leitura; copias devem ir para Minha biblioteca.";
             return Json{{"ok", false}, {"reason", error}};
         }
     } else {
@@ -1746,8 +1761,16 @@ Json LibraryCatalog::deriveAsset(const std::string& assetId, const std::string& 
     const std::string kind = source->value("kind", std::string("asset"));
     const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::system_clock::now().time_since_epoch()).count();
-    const std::string prefix = "asset-" + targetLibraryId + "-" + kind + "-" + slugify(derivedName) +
-                               "-" + base36(static_cast<uint64_t>(nowMs));
+    std::string prefix;
+    if (kind == "mcp") {
+        std::string shortSlug = slugify(derivedName);
+        if (shortSlug.size() > 34) shortSlug.resize(34);
+        prefix = "mcp-user-" + shortSlug + "-" + base36(static_cast<uint64_t>(nowMs));
+        if (prefix.size() > 60) prefix.resize(60);
+    } else {
+        prefix = "asset-" + targetLibraryId + "-" + kind + "-" + slugify(derivedName) +
+                 "-" + base36(static_cast<uint64_t>(nowMs));
+    }
     const std::string newId = uniqueId(prefix, assets_);
 
     Json derived = *source;
@@ -1783,6 +1806,145 @@ Json LibraryCatalog::deriveAsset(const std::string& assetId, const std::string& 
     return Json{{"ok", true}, {"asset_id", newId}, {"library_id", targetLibraryId}, {"asset", result}};
 }
 
+Json LibraryCatalog::ensureCopyInOwnLibrary(const std::string& assetId, std::string& error) {
+    error.clear();
+    std::string warning;
+    refresh(warning);
+
+    const Json* source = find(assetId);
+    if (!source) {
+        error = "Ativo nao encontrado: " + assetId;
+        return Json{{"ok", false}, {"reason", error}};
+    }
+    if (!isBuiltinAsset(*source)) {
+        return Json{
+            {"ok", true},
+            {"asset_id", assetId},
+            {"source_asset_id", assetId},
+            {"library_id", source->value("libraryId", std::string())},
+            {"copied", false}
+        };
+    }
+
+    // Reaproveita copia existente em "Minha biblioteca" se ja houver derivado deste ativo.
+    std::string ownLibId;
+    for (const auto& lib : libraries_) {
+        if (!lib.value("isBuiltin", false) &&
+            lib.value("scope", std::string()) == "workspace" &&
+            lib.value("name", std::string()) == "Minha biblioteca") {
+            ownLibId = lib.value("id", std::string());
+            break;
+        }
+    }
+    if (!ownLibId.empty()) {
+        for (const auto& candidate : assets_) {
+            if (candidate.value("libraryId", std::string()) != ownLibId) continue;
+            if (candidate.contains("derivedFrom") && candidate.at("derivedFrom").is_object() &&
+                candidate.at("derivedFrom").value("assetId", std::string()) == assetId) {
+                return Json{
+                    {"ok", true},
+                    {"asset_id", candidate.value("id", std::string())},
+                    {"source_asset_id", assetId},
+                    {"library_id", ownLibId},
+                    {"copied", false}
+                };
+            }
+        }
+    }
+
+    Json derived = deriveAsset(assetId, "", "", error);
+    if (!derived.value("ok", false)) return derived;
+    return Json{
+        {"ok", true},
+        {"asset_id", derived.value("asset_id", std::string())},
+        {"source_asset_id", assetId},
+        {"library_id", derived.value("library_id", std::string())},
+        {"copied", true}
+    };
+}
+
+Json LibraryCatalog::updateDerivedAsset(const std::string& assetId, const Json& patch, std::string& error) {
+    error.clear();
+    std::string warning;
+    refresh(warning);
+
+    Json* asset = mutableAsset(assetId);
+    if (!asset) {
+        error = "Ativo nao encontrado: " + assetId;
+        return Json{{"ok", false}, {"reason", error}};
+    }
+    if (isBuiltinAsset(*asset)) {
+        error = "Ativos da Biblioteca Arestrix sao somente leitura. Crie uma copia em Minha biblioteca com library_derive_asset antes de editar.";
+        return Json{{"ok", false}, {"reason", error}};
+    }
+    if (!patch.is_object()) {
+        error = "Patch de edicao deve ser um objeto JSON.";
+        return Json{{"ok", false}, {"reason", error}};
+    }
+
+    Json candidate = *asset;
+    if (patch.contains("name") && patch.at("name").is_string() && !patch.at("name").get<std::string>().empty()) {
+        candidate["name"] = patch.at("name");
+    }
+    if (patch.contains("description") && patch.at("description").is_string()) {
+        candidate["description"] = patch.at("description");
+    }
+    if (patch.contains("payload") && patch.at("payload").is_object()) {
+        const std::string kind = candidate.value("kind", std::string());
+        Json payload = candidate.contains("payload") && candidate.at("payload").is_object()
+                           ? candidate.at("payload") : Json::object();
+        const Json& pPatch = patch.at("payload");
+        if (kind == "mcp") {
+            auto sanitizeRefs = [](const Json& source) {
+                Json out = Json::object();
+                if (!source.is_object()) return out;
+                for (auto it = source.begin(); it != source.end(); ++it) {
+                    if (it.value().is_string() && isEnvReference(it.value().get<std::string>())) {
+                        out[it.key()] = it.value();
+                    }
+                }
+                return out;
+            };
+            for (const char* field : {"transport", "command", "args", "url", "cachedTools"}) {
+                if (pPatch.contains(field)) payload[field] = pPatch.at(field);
+            }
+            if (pPatch.contains("env") && pPatch.at("env").is_object()) {
+                payload["env"] = sanitizeRefs(pPatch.at("env"));
+            }
+            if (pPatch.contains("headers") && pPatch.at("headers").is_object()) {
+                payload["headers"] = sanitizeRefs(pPatch.at("headers"));
+            }
+        } else if (kind == "skill") {
+            for (const char* field : {"markdownContent", "systemPrompt", "tools"}) {
+                if (pPatch.contains(field)) payload[field] = pPatch.at(field);
+            }
+        } else if (kind == "agent-template" || kind == "pipeline") {
+            if (pPatch.contains("template") && pPatch.at("template").is_object()) {
+                Json tpl = payload.contains("template") && payload.at("template").is_object()
+                               ? payload.at("template") : Json::object();
+                for (auto it = pPatch.at("template").begin(); it != pPatch.at("template").end(); ++it) {
+                    tpl[it.key()] = it.value();
+                }
+                payload["template"] = tpl;
+            }
+        }
+        payload["kind"] = kind;
+        candidate["payload"] = payload;
+    }
+
+    Json newAudit = auditAssetValue(candidate);
+    if (newAudit.value("verdict", std::string()) == "REJECT") {
+        error = "Edicao bloqueada pela auditoria de seguranca (veredito REJECT).";
+        return Json{{"ok", false}, {"reason", error}, {"audit", newAudit}};
+    }
+    candidate["audit"] = newAudit;
+    candidate["updatedAt"] = nowIso();
+    *asset = std::move(candidate);
+    reindex();
+    if (!saveState(error)) return Json{{"ok", false}, {"reason", error}};
+    return Json{{"ok", true}, {"asset_id", assetId}, {"asset", detail(assetId).value_or(Json::object())}};
+}
+
 Json LibraryCatalog::restoreAsset(const std::string& assetId, std::string& error) {
     error.clear();
     std::string warning;
@@ -1816,11 +1978,13 @@ Json LibraryCatalog::auditAsset(const std::string& assetId, std::string& error) 
         return Json{{"ok", false}, {"reason", error}};
     }
     Json audit = auditAssetValue(*asset);
-    (*asset)["audit"] = audit;
-    (*asset)["updatedAt"] = nowIso();
-    if (!saveState(error)) return Json{{"ok", false}, {"reason", error}};
+    if (!isBuiltinAsset(*asset)) {
+        (*asset)["audit"] = audit;
+        (*asset)["updatedAt"] = nowIso();
+        if (!saveState(error)) return Json{{"ok", false}, {"reason", error}};
+    }
     return Json{{"ok", true}, {"asset_id", assetId}, {"name", asset->value("name", std::string())},
-                {"audit", audit}};
+                {"readonly", isBuiltinAsset(*asset)}, {"audit", audit}};
 }
 
 } // namespace libraries

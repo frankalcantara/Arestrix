@@ -7,7 +7,11 @@ import { WorkspaceManager } from '../src/core/workspace/WorkspaceManager.ts';
 import { SkillLedgerService } from '../src/core/skills/SkillLedgerService.ts';
 import { McpLedgerService } from '../src/core/skills/McpLedgerService.ts';
 import {
+  applyTreeNodeContextAction,
   buildEditableNodeFromAsset,
+  buildNodeFromLibraryAsset,
+  ensureCopyInOwnLibrary,
+  getTreeNodeContextActions,
   isBundledAssetModified,
   renderLibraryBrowser
 } from '../src/ui/libraries/LibraryTree.ts';
@@ -173,5 +177,150 @@ describe('LibraryTree - edição e restauração', () => {
     expect(node!.position).toEqual({ x: 420, y: 50, z: 0 });
     expect(node!.librarySource?.assetId).toBe('asset-local-agent');
     expect(node!.agentSettings?.inheritModel).toBe(false);
+  });
+
+  it('constrói vértice livre para qualquer tipo de asset (agent-template, skill e mcp) sem sufixo editável', () => {
+    const graph = {
+      getAllNodes: () => [{ position: { x: 100, y: 50, z: 0 } }]
+    } as any;
+
+    const skillAsset = {
+      id: 'asset-skill-demo',
+      libraryId: 'library-arestrix',
+      kind: 'skill',
+      name: 'Skill Demo',
+      description: 'Desc',
+      license: 'MIT',
+      version: '1.0.0',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      audit: { hash: 'a'.repeat(64), verdict: 'APPROVE', riskScore: 0, findings: [], warnings: [] },
+      provenance: { sourceKind: 'builtin', sourceId: 'library-arestrix', importedAt: '2026-01-01T00:00:00.000Z' },
+      payload: { kind: 'skill', markdownContent: '# Demo', systemPrompt: 'Prompt', tools: ['read'] }
+    } as any;
+
+    const skillNode = buildNodeFromLibraryAsset(skillAsset, graph);
+    expect(skillNode).not.toBeNull();
+    expect(skillNode!.type).toBe('agent');
+    expect(skillNode!.label).toBe('Skill Demo');
+    expect(skillNode!.agentSettings?.activeSkillId).toBe('asset-skill-demo');
+    expect(skillNode!.agentSettings?.skills).toHaveLength(1);
+    expect(skillNode!.position).toEqual({ x: 420, y: 50, z: 0 });
+
+    const mcpAsset = {
+      id: 'asset-mcp-demo',
+      libraryId: 'library-arestrix',
+      kind: 'mcp',
+      name: 'Demo MCP',
+      description: 'Desc',
+      license: 'MIT',
+      version: '1.0.0',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      audit: { hash: 'b'.repeat(64), verdict: 'APPROVE', riskScore: 0, findings: [], warnings: [] },
+      provenance: { sourceKind: 'builtin', sourceId: 'library-arestrix', importedAt: '2026-01-01T00:00:00.000Z' },
+      payload: {
+        kind: 'mcp',
+        transport: 'stdio',
+        command: 'npx',
+        args: ['-y', 'demo@1.0.0'],
+        cachedTools: [{ name: 'run_demo', description: 'Run', serverId: 'mcp-demo' }]
+      }
+    } as any;
+
+    const mcpNode = buildNodeFromLibraryAsset(mcpAsset, graph);
+    expect(mcpNode).not.toBeNull();
+    expect(mcpNode!.type).toBe('mcp');
+    expect(mcpNode!.label).toBe('Demo MCP');
+    expect(mcpNode!.mcpSettings?.server).toBe('asset-mcp-demo');
+    expect(mcpNode!.mcpSettings?.tool).toBe('run_demo');
+  });
+
+  it('oferece Expandir todos / Recolher todos no menu de contexto conforme estado do nó e presença de filhos', () => {
+    const groups = [
+      {
+        name: 'Dados & Persistência',
+        total: 2,
+        subdomains: [
+          { name: 'SQL', assets: [{ id: 'a1' } as any] },
+          { name: 'NoSQL', assets: [{ id: 'a2' } as any] }
+        ]
+      }
+    ];
+
+    const state = {
+      expandedLibraries: new Set<string>(),
+      seededLibraries: new Set<string>(),
+      expandedGroups: new Set<string>()
+    };
+
+    // Biblioteca sem filhos: não exibe menu
+    expect(getTreeNodeContextActions({ kind: 'library', libraryId: 'lib-empty' }, [], state)).toEqual([]);
+
+    // Biblioteca fechada com filhos: apenas Expandir todos
+    const libTarget = { kind: 'library' as const, libraryId: 'library-arestrix' };
+    expect(getTreeNodeContextActions(libTarget, groups, state)).toEqual(['expand-all']);
+
+    // Expandir todos abre biblioteca, domínio e todos os subdomínios
+    applyTreeNodeContextAction(libTarget, 'expand-all', groups, state);
+    expect(state.expandedLibraries.has('library-arestrix')).toBe(true);
+    expect(getTreeNodeContextActions(libTarget, groups, state)).toEqual(['collapse-all']);
+
+    // Recolher um subdomínio deixa o nó pai parcialmente aberto -> oferece ambas as ações
+    const subTarget = { kind: 'subdomain' as const, libraryId: 'library-arestrix', domain: 'Dados & Persistência', subdomain: 'SQL' };
+    expect(getTreeNodeContextActions(subTarget, groups, state)).toEqual(['collapse-all']);
+    applyTreeNodeContextAction(subTarget, 'collapse-all', groups, state);
+    expect(getTreeNodeContextActions(subTarget, groups, state)).toEqual(['expand-all']);
+    expect(getTreeNodeContextActions(libTarget, groups, state)).toEqual(['expand-all', 'collapse-all']);
+
+    const domTarget = { kind: 'domain' as const, libraryId: 'library-arestrix', domain: 'Dados & Persistência' };
+    expect(getTreeNodeContextActions(domTarget, groups, state)).toEqual(['expand-all', 'collapse-all']);
+
+    // Recolher todos na biblioteca fecha tudo
+    applyTreeNodeContextAction(libTarget, 'collapse-all', groups, state);
+    expect(state.expandedLibraries.has('library-arestrix')).toBe(false);
+    expect(state.expandedGroups.size).toBe(0);
+    expect(getTreeNodeContextActions(libTarget, groups, state)).toEqual(['expand-all']);
+  });
+
+  it('copia ativos da Biblioteca Arestrix para Minha biblioteca sem jamais alterar o original', async () => {
+    const bus = new EventBus();
+    const reg = LibraryRegistry.getInstance(bus);
+    reg.resetForTesting(bus);
+    const ws = WorkspaceManager.getInstance(bus);
+    ws.resetForTesting(bus);
+    SkillLedgerService.resetForTesting(bus);
+    McpLedgerService.resetForTesting(bus);
+    const svc = new LibraryService(reg, ws, LibraryAuditGate.getInstance(), fakeStore);
+
+    const originalMcp = reg.listAssets('library-arestrix').find(a => a.kind === 'mcp')!;
+    expect(originalMcp).toBeTruthy();
+
+    const state = {
+      selectedLibraryId: 'library-arestrix',
+      selectedAssetId: originalMcp.id,
+      search: '',
+      kind: 'all' as const,
+      expandedLibraries: new Set<string>(['library-arestrix']),
+      seededLibraries: new Set<string>(['library-arestrix']),
+      expandedGroups: new Set<string>()
+    };
+
+    const copy1 = await ensureCopyInOwnLibrary(svc, { registry: reg }, state, originalMcp, () => {});
+    expect(copy1).not.toBeNull();
+    expect(copy1!.id).not.toBe(originalMcp.id);
+    expect(copy1!.id.length).toBeLessThanOrEqual(64);
+    expect(copy1!.libraryId).not.toBe('library-arestrix');
+    expect(reg.get(copy1!.libraryId)?.name).toBe('Minha biblioteca');
+    expect(copy1!.derivedFrom?.assetId).toBe(originalMcp.id);
+
+    // Original na Biblioteca Arestrix permanece intacto e somente leitura
+    const originalAfter = reg.getAsset(originalMcp.id)!;
+    expect(originalAfter.status).toBe('available');
+    expect(originalAfter.libraryId).toBe('library-arestrix');
+    const editAttempt = await svc.updateDerivedAsset(originalMcp.id, {});
+    expect(editAttempt.ok).toBe(false);
+
+    // Segunda chamada reaproveita a cópia em Minha biblioteca sem duplicar
+    const copy2 = await ensureCopyInOwnLibrary(svc, { registry: reg }, state, originalMcp, () => {});
+    expect(copy2?.id).toBe(copy1!.id);
   });
 });

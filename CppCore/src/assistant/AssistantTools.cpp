@@ -772,21 +772,43 @@ std::vector<AssistantToolDef> assistantTools(RuntimeLang lang) {
         ToolRisk::Read));
     tools.push_back(tool("library_install_asset",
         L("Instala um ativo MCP ou skill da Biblioteca no Workspace (.workspace/mcps ou .workspace/skills) e registra "
-          "a homologacao no ledger. Devolve requiredEnvVars e missingEnvVars (nunca expoe segredos).",
+          "a homologacao no ledger. Se o ativo vier da Biblioteca Arestrix, copia primeiro para Minha biblioteca "
+          "(a Biblioteca Arestrix e estritamente somente leitura). Devolve requiredEnvVars e missingEnvVars.",
           "Installs an MCP or skill library asset into the Workspace (.workspace/mcps or .workspace/skills) and "
-          "records its approval in the governance ledger. Returns requiredEnvVars and missingEnvVars (never exposes secrets)."),
+          "records its approval in the governance ledger. If the asset comes from the Arestrix Library, copies it "
+          "first into My Library (the Arestrix Library is strictly read-only). Returns requiredEnvVars and missingEnvVars."),
         object(Json{{"asset_id", prop("string", L("Id do ativo MCP ou skill.", "MCP or skill asset id."))},
                     {"allow_caution", prop("boolean", L("Permite instalar ativos com veredito CAUTION (padrao true).",
                                                         "Allow installing CAUTION verdict assets (default true)."))}},
                {"asset_id"}),
         ToolRisk::Edit));
+    tools.push_back(tool("library_derive_asset",
+        L("Cria uma copia editavel de um ativo da biblioteca em 'Minha biblioteca', mantendo o ativo original da "
+          "Biblioteca Arestrix imutavel. Use antes de library_edit_asset quando precisar personalizar um ativo.",
+          "Creates an editable copy of a library asset in 'My Library', keeping the original asset in the Arestrix "
+          "Library immutable. Use before library_edit_asset when customizing an asset."),
+        object(Json{{"asset_id", prop("string", L("Id do ativo de origem.", "Source asset id."))},
+                    {"name", prop("string", L("Nome da copia em Minha biblioteca (opcional).",
+                                              "Name for the copy in My Library (optional)."))}},
+               {"asset_id"}),
+        ToolRisk::Edit));
+    tools.push_back(tool("library_edit_asset",
+        L("Edita um ativo que ja esteja em 'Minha biblioteca' (nome, descricao ou payload). Recusa editar ativos da "
+          "Biblioteca Arestrix: copie primeiro com library_derive_asset, edite a copia e depois insira com library_add_node.",
+          "Edits an asset that is already in 'My Library' (name, description or payload). Refuses to edit assets in "
+          "the Arestrix Library: copy first with library_derive_asset, edit the copy, then insert with library_add_node."),
+        object(Json{{"asset_id", prop("string", L("Id da copia em Minha biblioteca.", "Copy id in My Library."))},
+                    {"patch", prop("object", L("Objeto JSON com campos a alterar: name, description e/ou payload.",
+                                               "JSON object with fields to update: name, description and/or payload."))}},
+               {"asset_id", "patch"}),
+        ToolRisk::Edit));
     tools.push_back(tool("library_add_node",
-        L("Cria um vertice no grafo a partir de um ativo da biblioteca em 1 passo. Para agent-template/pipeline/skill, "
-          "preserva agentSettings e portas. Para mcp, instala automaticamente o servidor no Workspace + ledger e cria "
-          "o vertice de interacao type='mcp' pronto para conectar.",
-          "Creates a graph vertex from a library asset in 1 step. For agent-template/pipeline/skill, preserves "
-          "agentSettings and ports. For mcp, automatically installs the server into the Workspace + ledger and creates "
-          "the type='mcp' interaction vertex ready to connect."),
+        L("Cria um vertice no grafo a partir de um ativo da biblioteca em 1 passo. Se o ativo estiver na Biblioteca "
+          "Arestrix, copia automaticamente primeiro para 'Minha biblioteca' (nunca altera a Biblioteca Arestrix), "
+          "instala o MCP/skill quando necessario e cria o vertice pronto para conectar.",
+          "Creates a graph vertex from a library asset in 1 step. If the asset belongs to the Arestrix Library, "
+          "automatically copies it first into 'My Library' (never mutates the Arestrix Library), installs the "
+          "MCP/skill when needed, and creates the vertex ready to connect."),
         object(Json{{"asset_id", prop("string", L("Id do ativo (veja library_search_assets).",
                                                    "Asset id (see library_search_assets)."))},
                     {"label", prop("string", L("Rotulo do vertice (opcional; padrao = nome do ativo).",
@@ -1315,7 +1337,8 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
         }
         if (name == "library_taxonomy" || name == "library_list_assets" ||
             name == "library_search_assets" || name == "library_get_asset" ||
-            name == "library_install_asset") {
+            name == "library_install_asset" || name == "library_derive_asset" ||
+            name == "library_edit_asset") {
             LibraryCatalog catalog;
             std::string warning;
             LibraryCatalog::load(projectRootOf(host), catalog, warning);
@@ -1358,19 +1381,57 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
             }
 
             if (name == "library_install_asset") {
-                const std::string assetId = argStr(args, "asset_id");
-                if (assetId.empty()) {
+                const std::string sourceAssetId = argStr(args, "asset_id");
+                if (sourceAssetId.empty()) {
                     return fail(langPick(lang, "Informe o asset_id para instalar.",
                                          "Provide the asset_id to install."), name);
                 }
+                std::string copyErr;
+                Json copyRes = catalog.ensureCopyInOwnLibrary(sourceAssetId, copyErr);
+                if (!copyRes.value("ok", false)) {
+                    return fail(copyErr.empty() ? copyRes.value("reason", std::string("Falha ao copiar ativo para Minha biblioteca.")) : copyErr, name);
+                }
+                const std::string workingId = copyRes.value("asset_id", sourceAssetId);
                 const bool allowCaution = argBool(args, "allow_caution", true);
                 std::string installErr;
-                Json result = catalog.installAsset(assetId, allowCaution, installErr);
+                Json result = catalog.installAsset(workingId, allowCaution, installErr);
                 if (!result.value("ok", false)) {
                     return fail(installErr.empty() ? result.value("reason", std::string("Falha ao instalar ativo.")) : installErr, name);
                 }
+                result["source_asset_id"] = sourceAssetId;
+                result["copied_to_own_library"] = copyRes.value("copied", false);
                 if (!warning.empty()) result["warning"] = warning;
-                return okOutcome(result, name, Json{{"asset", assetId}, {"kind", result.value("kind", std::string())}});
+                return okOutcome(result, name, Json{{"asset", workingId}, {"kind", result.value("kind", std::string())}});
+            }
+
+            if (name == "library_derive_asset") {
+                const std::string sourceAssetId = argStr(args, "asset_id");
+                if (sourceAssetId.empty()) {
+                    return fail(langPick(lang, "Informe o asset_id de origem.",
+                                         "Provide the source asset_id."), name);
+                }
+                std::string deriveErr;
+                Json result = catalog.deriveAsset(sourceAssetId, argStr(args, "name"), "", deriveErr);
+                if (!result.value("ok", false)) {
+                    return fail(deriveErr.empty() ? result.value("reason", std::string("Falha ao copiar ativo.")) : deriveErr, name);
+                }
+                if (!warning.empty()) result["warning"] = warning;
+                return okOutcome(result, name, Json{{"asset", result.value("asset_id", std::string())}});
+            }
+
+            if (name == "library_edit_asset") {
+                const std::string targetAssetId = argStr(args, "asset_id");
+                if (targetAssetId.empty()) {
+                    return fail(langPick(lang, "Informe o asset_id da copia em Minha biblioteca.",
+                                         "Provide the copy asset_id in My Library."), name);
+                }
+                std::string editErr;
+                Json result = catalog.updateDerivedAsset(targetAssetId, argObj(args, "patch"), editErr);
+                if (!result.value("ok", false)) {
+                    return fail(editErr.empty() ? result.value("reason", std::string("Falha ao editar ativo.")) : editErr, name);
+                }
+                if (!warning.empty()) result["warning"] = warning;
+                return okOutcome(result, name, Json{{"asset", targetAssetId}});
             }
 
             const std::string id = argStr(args, "id");
@@ -1525,14 +1586,22 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                 LibraryCatalog::load(root, catalog, warning);
                 if (const Json* libAsset = catalog.find(server);
                     libAsset && libAsset->value("kind", std::string()) == "mcp") {
-                    std::string instErr;
-                    Json instRes = catalog.installAsset(server, true, instErr);
-                    if (instRes.value("ok", false)) {
-                        autoInstalled = true;
-                        serverError.clear();
-                        serverInfo = findMcpServer(root, server, serverError);
-                    } else if (!instErr.empty()) {
-                        serverError = instErr;
+                    std::string copyErr;
+                    Json copyRes = catalog.ensureCopyInOwnLibrary(server, copyErr);
+                    if (copyRes.value("ok", false)) {
+                        const std::string workingServer = copyRes.value("asset_id", server);
+                        std::string instErr;
+                        Json instRes = catalog.installAsset(workingServer, true, instErr);
+                        if (instRes.value("ok", false)) {
+                            autoInstalled = true;
+                            server = workingServer;
+                            serverError.clear();
+                            serverInfo = findMcpServer(root, server, serverError);
+                        } else if (!instErr.empty()) {
+                            serverError = instErr;
+                        }
+                    } else if (!copyErr.empty()) {
+                        serverError = copyErr;
                     }
                 }
             }
@@ -1663,8 +1732,8 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
         }
 
         if (name == "library_add_node") {
-            const std::string assetId = argStr(args, "asset_id");
-            if (assetId.empty()) {
+            const std::string sourceAssetId = argStr(args, "asset_id");
+            if (sourceAssetId.empty()) {
                 return fail(langPick(lang, "Informe o asset_id do ativo da biblioteca.",
                                      "Provide the library asset_id."), name);
             }
@@ -1672,12 +1741,31 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
             LibraryCatalog catalog;
             std::string warning;
             LibraryCatalog::load(root, catalog, warning);
-            const Json* asset = catalog.find(assetId);
-            if (!asset) {
+            const Json* sourceAsset = catalog.find(sourceAssetId);
+            if (!sourceAsset) {
                 return fail(langPick(lang, "Ativo nao encontrado na biblioteca: '",
-                                     "Asset not found in the library: '") + assetId + "'. " +
+                                     "Asset not found in the library: '") + sourceAssetId + "'. " +
                             langPick(lang, "Use library_list_assets ou library_search_assets.",
                                      "Use library_list_assets or library_search_assets."), name);
+            }
+
+            // Regra de imutabilidade: ativos da Biblioteca Arestrix sao copiados primeiro
+            // para "Minha biblioteca" antes de instalar ou inserir no grafo.
+            std::string workingAssetId = sourceAssetId;
+            bool copiedToOwnLibrary = false;
+            if (catalog.isBuiltinAsset(*sourceAsset)) {
+                std::string copyErr;
+                Json copyRes = catalog.ensureCopyInOwnLibrary(sourceAssetId, copyErr);
+                if (!copyRes.value("ok", false)) {
+                    return fail(copyErr.empty() ? copyRes.value("reason", std::string("Falha ao copiar ativo para Minha biblioteca.")) : copyErr, name);
+                }
+                workingAssetId = copyRes.value("asset_id", sourceAssetId);
+                copiedToOwnLibrary = copyRes.value("copied", false);
+            }
+            const Json* asset = catalog.find(workingAssetId);
+            if (!asset) {
+                return fail(langPick(lang, "Copia do ativo nao encontrada em Minha biblioteca.",
+                                     "Asset copy not found in My Library."), name);
             }
 
             Json overrides = argObj(args, "parameters");
@@ -1692,19 +1780,21 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
             Json missingEnvVars = Json::array();
             if (asset->value("kind", std::string()) == "mcp") {
                 std::string instErr;
-                Json instRes = catalog.installAsset(assetId, true, instErr);
+                Json instRes = catalog.installAsset(workingAssetId, true, instErr);
                 if (!instRes.value("ok", false)) {
                     return fail(instErr.empty() ? instRes.value("reason", std::string("Falha ao instalar MCP.")) : instErr, name);
                 }
                 mcpInstalled = true;
                 if (instRes.contains("requiredEnvVars")) reqEnvVars = instRes.at("requiredEnvVars");
                 if (instRes.contains("missingEnvVars")) missingEnvVars = instRes.at("missingEnvVars");
-                asset = catalog.find(assetId);
+                asset = catalog.find(workingAssetId);
             }
 
             Json node;
             std::string error;
-            if (!catalog.buildNodeFromAsset(*asset, argStr(args, "label"), overrides,
+            const std::string requestedLabel = argStr(args, "label");
+            const std::string defaultCleanLabel = sourceAsset->value("name", workingAssetId);
+            if (!catalog.buildNodeFromAsset(*asset, requestedLabel.empty() ? defaultCleanLabel : requestedLabel, overrides,
                                             lang, node, error)) {
                 return fail(error, name);
             }
@@ -1721,7 +1811,9 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                 {"node_id", nodeId},
                 {"type", r.result.value("type", std::string())},
                 {"label", r.result.value("label", std::string())},
-                {"asset_id", assetId},
+                {"asset_id", workingAssetId},
+                {"source_asset_id", sourceAssetId},
+                {"copied_to_own_library", copiedToOwnLibrary},
                 {"ports", Json{{"inputs", r.result.value("inputs", Json::array())},
                                {"outputs", r.result.value("outputs", Json::array())}}},
                 {"next", langPick(lang, "Use connect para ligar as portas e validate_graph para conferir.",
@@ -1729,14 +1821,14 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
             };
             if (mcpInstalled) {
                 res["installed"] = true;
-                res["server"] = assetId;
+                res["server"] = workingAssetId;
                 if (node.contains("mcpSettings") && node.at("mcpSettings").is_object()) {
                     res["tool"] = node.at("mcpSettings").value("tool", std::string());
                 }
                 res["requiredEnvVars"] = reqEnvVars;
                 res["missingEnvVars"] = missingEnvVars;
             }
-            ToolOutcome o = okOutcome(res, name, Json{{"label", r.result.value("label", std::string())}, {"asset", assetId}});
+            ToolOutcome o = okOutcome(res, name, Json{{"label", r.result.value("label", std::string())}, {"asset", workingAssetId}});
             if (!r.uiOp.is_null()) o.uiOps.push_back(r.uiOp);
             return o;
         }

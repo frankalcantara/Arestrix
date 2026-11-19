@@ -12421,7 +12421,30 @@ TEST(assistant_copilot_mcp_library_env_and_standalone_compile) {
     CHECK(detailJson.contains("requiredEnvVars"));
     CHECK(detailJson.contains("envStatus"));
 
-    // 4. 1-step library_add_node em ativo MCP: instala em .workspace/mcps, grava mcp-ledger e cria vertice type=mcp
+    // 4. Imutabilidade da Biblioteca Arestrix: agente local NAO pode editar ativo em library-arestrix
+    auto forbiddenEdit = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_edit_asset",
+        json{{"asset_id", mcpAssetId}, {"patch", json{{"name", "Hacked Builtin"}}}});
+    CHECK(forbiddenEdit.result.isError);
+
+    // 4b. Fluxo correto: copia para "Minha biblioteca", edita a copia e insere no grafo
+    auto derivedMcp = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_derive_asset",
+        json{{"asset_id", mcpAssetId}, {"name", "Meu GitHub MCP"}});
+    CHECK(!derivedMcp.result.isError);
+    auto derivedMcpJson = taskforge::jsonutil::parse(derivedMcp.result.content);
+    const std::string copyAssetId = derivedMcpJson.value("asset_id", std::string());
+    CHECK(!copyAssetId.empty());
+    CHECK(copyAssetId != mcpAssetId);
+    CHECK(copyAssetId.size() <= 64);
+
+    auto editedCopy = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_edit_asset",
+        json{{"asset_id", copyAssetId}, {"patch", json{{"description", "Copia customizada pelo agente local"}}}});
+    CHECK(!editedCopy.result.isError);
+
+    // 4c. 1-step library_add_node em ativo MCP da Biblioteca Arestrix: copia/reaproveita copia em Minha biblioteca,
+    // instala em .workspace/mcps, grava mcp-ledger e cria vertice type=mcp sem jamais alterar library-arestrix.
     auto addedMcp = as::executeAssistantTool(
         doc, host, RuntimeLang::Pt, "library_add_node",
         json{{"asset_id", mcpAssetId}, {"label", "GitHub MCP"}, {"tool", "list_issues"}});
@@ -12429,10 +12452,17 @@ TEST(assistant_copilot_mcp_library_env_and_standalone_compile) {
     auto addedMcpJson = taskforge::jsonutil::parse(addedMcp.result.content);
     CHECK(addedMcpJson.value("type", std::string()) == "mcp");
     CHECK(addedMcpJson.value("installed", false) == true);
-    CHECK(addedMcpJson.value("server", std::string()) == mcpAssetId);
+    CHECK(addedMcpJson.value("server", std::string()) == copyAssetId);
+    CHECK(addedMcpJson.value("source_asset_id", std::string()) == mcpAssetId);
     CHECK(addedMcpJson.value("tool", std::string()) == "list_issues");
-    CHECK(fs::is_regular_file(root / ".workspace" / "mcps" / (mcpAssetId + ".json")));
+    CHECK(fs::is_regular_file(root / ".workspace" / "mcps" / (copyAssetId + ".json")));
     CHECK(fs::is_regular_file(root / ".workspace" / "governance" / "mcp-ledger.json"));
+    // Original em library-arestrix permanece intacto (status=available, nao alterado)
+    auto originalAfter = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "library_get_asset", json{{"id", mcpAssetId}});
+    CHECK(!originalAfter.result.isError);
+    auto originalAfterJson = taskforge::jsonutil::parse(originalAfter.result.content);
+    CHECK(originalAfterJson.value("libraryId", std::string()) == "library-arestrix");
+    CHECK(originalAfterJson.value("status", std::string()) == "available");
 
     // 5. validate_graph passa sem erros de governanca MCP
     auto val = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "validate_graph", json::object());

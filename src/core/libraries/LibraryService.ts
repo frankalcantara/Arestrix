@@ -7,6 +7,7 @@ import {
 } from './BuiltinLibraryCatalog.ts';
 import { WorkspaceManager } from '../workspace/WorkspaceManager.ts';
 import type { IWorkspaceApprovedSkill } from '../workspace/types.ts';
+import { McpLedgerService } from '../skills/McpLedgerService.ts';
 import { LibraryRegistry } from './LibraryRegistry.ts';
 import { LibraryAuditGate } from './LibraryAuditGate.ts';
 import { LibraryStore } from './LibraryStore.ts';
@@ -400,6 +401,9 @@ export class LibraryService {
   ): Promise<{ ok: boolean; asset?: ILibraryAsset; reason?: string }> {
     const current = this.registry.getAsset(assetId);
     if (!current) return { ok: false, reason: 'Asset não encontrado.' };
+    if (current.libraryId === 'library-arestrix' || this.registry.get(current.libraryId)?.isBuiltin) {
+      return { ok: false, reason: 'Ativos da Biblioteca Arestrix são imutáveis. Copie para Minha biblioteca antes de editar.' };
+    }
     if (!current.derivedFrom) {
       return { ok: false, reason: 'Assets de biblioteca são imutáveis. Crie um derivado para editar.' };
     }
@@ -1192,6 +1196,28 @@ export class LibraryService {
       path = `${directories.mcps}/${asset.id}.json`;
       const ok = await this.writeWorkspaceFile(path, JSON.stringify(config, null, 2));
       if (!ok) return { ok: false, reason: 'Não foi possível gravar o servidor MCP no Workspace.' };
+
+      const ledger = McpLedgerService.getInstance();
+      const tools = Array.isArray(config.cachedTools) ? config.cachedTools : [];
+      ledger.recordAudit({
+        hash: asset.audit.hash,
+        serverId: asset.id,
+        name: asset.name,
+        transport: config.transport,
+        verdict: asset.audit.verdict,
+        riskScore: asset.audit.riskScore,
+        auditedAt: asset.audit.auditedAt || new Date().toISOString(),
+        auditedBy: 'ArestrixLibraryService',
+        scannerVersion: asset.audit.policyVersion || 'mcp-scanner-v1',
+        findingsCount: asset.audit.findings.length,
+        findings: [...asset.audit.findings],
+        warnings: [...asset.audit.warnings],
+        checklist: [],
+        toolCount: tools.length,
+        toolNames: tools.map(t => t.name).filter(Boolean),
+        provenance: asset.derivedFrom ? 'external-custom' : 'workspace-curated'
+      });
+      void ledger.syncToWorkspace();
     }
 
     this.registry.upsertAsset({ ...asset, status: 'installed', updatedAt: new Date().toISOString() });
@@ -1360,6 +1386,10 @@ export class LibraryService {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 32) || source.kind;
+    if (source.kind === 'mcp') {
+      const shortSlug = slug.slice(0, 38) || 'mcp';
+      return `mcp-user-${shortSlug}-${Date.now().toString(36)}`.slice(0, 64);
+    }
     return `asset-${libraryId}-${source.kind}-${slug}-${Date.now().toString(36)}`;
   }
 

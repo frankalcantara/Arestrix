@@ -79,8 +79,16 @@ public:
     Json installAsset(const std::string& assetId, bool allowCaution, std::string& error);
     Json deriveAsset(const std::string& assetId, const std::string& name,
                      const std::string& libraryId, std::string& error);
+    // Garante uma copia editavel em "Minha biblioteca" para ativos da Biblioteca Arestrix
+    // (ou de qualquer biblioteca builtin). Nunca altera o ativo original em library-arestrix.
+    Json ensureCopyInOwnLibrary(const std::string& assetId, std::string& error);
+    // Edita apenas ativos de bibliotecas do usuario (ex.: "Minha biblioteca").
+    // Bloqueia terminantemente qualquer edicao em ativos da Biblioteca Arestrix.
+    Json updateDerivedAsset(const std::string& assetId, const Json& patch, std::string& error);
     Json restoreAsset(const std::string& assetId, std::string& error);
     Json auditAsset(const std::string& assetId, std::string& error);
+
+    bool isBuiltinAsset(const Json& asset) const;
 
 private:
     bool rebuildFromWorkspace(std::string& warning);

@@ -721,6 +721,39 @@
   line-height: 1;
 }
 
+.properties-library-context-menu {
+  position: fixed;
+  z-index: 10050;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--modal-line);
+  border-radius: 6px;
+  background: var(--modal-surface, #ffffff);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.properties-library-context-item {
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--modal-ink);
+  font-family: var(--modal-font);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.properties-library-context-item:hover {
+  background: var(--modal-hover);
+  color: var(--modal-accent);
+}
+
 .properties-library-taxon-name {
   flex: 1;
   min-width: 0;

@@ -9,10 +9,12 @@ import { t } from '../../i18n/index.ts';
 
 export interface ILibraryBrowserOptions {
   registry: LibraryRegistry;
-  /** Grafo ativo: usado por "Editar" para criar o vértice editável. */
+  /** Grafo ativo: usado por "Inserir asset" e "Editar" para criar vértices. */
   graph?: Graph;
   /** Quando omitido, o navegador lista as bibliotecas de todos os escopos. */
   scope?: LibraryScope;
+  /** Callback para fechar a Biblioteca / Backstage e retornar à tela principal do Studio. */
+  onReturnToStudio?: () => void;
 }
 
 interface ILibraryBrowserState {
@@ -20,9 +22,20 @@ interface ILibraryBrowserState {
   selectedAssetId?: string;
   search: string;
   kind: 'all' | 'skill' | 'mcp' | 'agent-template' | 'pipeline';
-  /** Chaves dos nós da ontologia (domínio e domínio + subdomínio) abertos. */
+  /** Bibliotecas cujas árvores estão abertas (ex.: Biblioteca Arestrix, Minha biblioteca). */
+  expandedLibraries: Set<string>;
+  /** Bibliotecas que já receberam expansão inicial dos domínios. */
+  seededLibraries: Set<string>;
+  /** Chaves dos nós da ontologia (libraryId + domínio e libraryId + domínio + subdomínio) abertos. */
   expandedGroups: Set<string>;
 }
+
+export type LibraryTreeContextTarget =
+  | { kind: 'library'; libraryId: string }
+  | { kind: 'domain'; libraryId: string; domain: string }
+  | { kind: 'subdomain'; libraryId: string; domain: string; subdomain: string };
+
+export type LibraryTreeContextAction = 'expand-all' | 'collapse-all';
 
 interface IAssetSubdomainGroup {
   name: string;
@@ -155,9 +168,19 @@ function compareGroupNames(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
-/** Chave estável de um nó da ontologia: domínio sozinho ou domínio + subdomínio. */
-function groupKey(domain: string, subdomain?: string): string {
-  return subdomain === undefined ? domain : `${domain}${GROUP_KEY_SEPARATOR}${subdomain}`;
+/** Chave estável de um nó da ontologia por biblioteca: libraryId + domínio ou + subdomínio. */
+function groupKey(libraryId: string, domain: string, subdomain?: string): string {
+  return subdomain === undefined
+    ? `${libraryId}${GROUP_KEY_SEPARATOR}${domain}`
+    : `${libraryId}${GROUP_KEY_SEPARATOR}${domain}${GROUP_KEY_SEPARATOR}${subdomain}`;
+}
+
+function parseGroupKey(key: string): { libraryId: string; domain: string; subdomain?: string } {
+  const parts = key.split(GROUP_KEY_SEPARATOR);
+  if (parts.length >= 3) {
+    return { libraryId: parts[0], domain: parts[1], subdomain: parts.slice(2).join(GROUP_KEY_SEPARATOR) };
+  }
+  return { libraryId: parts[0] || '', domain: parts[1] || '' };
 }
 
 function groupKeyAttribute(key: string): string {
@@ -198,24 +221,32 @@ function groupAssetsByTaxonomy(assets: ILibraryAsset[]): IAssetDomainGroup[] {
     });
 }
 
-function expandGroups(state: ILibraryBrowserState, groups: IAssetDomainGroup[]): void {
+function expandGroups(state: ILibraryBrowserState, libraryId: string, groups: IAssetDomainGroup[]): void {
   for (const group of groups) {
-    state.expandedGroups.add(groupKey(group.name));
+    state.expandedGroups.add(groupKey(libraryId, group.name));
     for (const subdomain of group.subdomains) {
-      state.expandedGroups.add(groupKey(group.name, subdomain.name));
+      state.expandedGroups.add(groupKey(libraryId, group.name, subdomain.name));
     }
   }
 }
 
-function seedExpandedGroups(state: ILibraryBrowserState, assets: ILibraryAsset[]): void {
-  state.expandedGroups.clear();
+function collapseLibraryGroups(state: ILibraryBrowserState, libraryId: string): void {
+  const prefix = `${libraryId}${GROUP_KEY_SEPARATOR}`;
+  for (const key of Array.from(state.expandedGroups)) {
+    if (key.startsWith(prefix)) state.expandedGroups.delete(key);
+  }
+}
+
+function seedExpandedGroups(state: ILibraryBrowserState, libraryId: string, assets: ILibraryAsset[]): void {
+  collapseLibraryGroups(state, libraryId);
   const groups = groupAssetsByTaxonomy(assets);
   for (const group of groups) {
-    state.expandedGroups.add(groupKey(group.name));
+    state.expandedGroups.add(groupKey(libraryId, group.name));
   }
   if (assets.length <= AUTO_EXPAND_ASSET_LIMIT) {
-    expandGroups(state, groups);
+    expandGroups(state, libraryId, groups);
   }
+  state.seededLibraries.add(libraryId);
 }
 
 function toggleGroup(state: ILibraryBrowserState, key: string): void {
@@ -223,6 +254,94 @@ function toggleGroup(state: ILibraryBrowserState, key: string): void {
     state.expandedGroups.delete(key);
   } else {
     state.expandedGroups.add(key);
+  }
+}
+
+export function getTreeNodeContextActions(
+  target: LibraryTreeContextTarget,
+  groups: IAssetDomainGroup[],
+  state: Pick<ILibraryBrowserState, 'expandedLibraries' | 'expandedGroups'>
+): LibraryTreeContextAction[] {
+  if (target.kind === 'library') {
+    if (groups.length === 0) return [];
+    const isOpen = state.expandedLibraries.has(target.libraryId);
+    const allExpanded = isOpen && groups.every(group =>
+      state.expandedGroups.has(groupKey(target.libraryId, group.name)) &&
+      group.subdomains.every(sub => state.expandedGroups.has(groupKey(target.libraryId, group.name, sub.name)))
+    );
+    const actions: LibraryTreeContextAction[] = [];
+    if (!allExpanded) actions.push('expand-all');
+    if (isOpen) actions.push('collapse-all');
+    return actions;
+  }
+
+  const group = groups.find(g => g.name === target.domain);
+  if (!group) return [];
+
+  if (target.kind === 'domain') {
+    if (group.subdomains.length === 0) return [];
+    const domainKey = groupKey(target.libraryId, group.name);
+    const isOpen = state.expandedGroups.has(domainKey);
+    const allExpanded = isOpen && group.subdomains.every(sub =>
+      state.expandedGroups.has(groupKey(target.libraryId, group.name, sub.name))
+    );
+    const actions: LibraryTreeContextAction[] = [];
+    if (!allExpanded) actions.push('expand-all');
+    if (isOpen) actions.push('collapse-all');
+    return actions;
+  }
+
+  const sub = group.subdomains.find(s => s.name === target.subdomain);
+  if (!sub || sub.assets.length === 0) return [];
+  const subKey = groupKey(target.libraryId, group.name, sub.name);
+  return state.expandedGroups.has(subKey) ? ['collapse-all'] : ['expand-all'];
+}
+
+export function applyTreeNodeContextAction(
+  target: LibraryTreeContextTarget,
+  action: LibraryTreeContextAction,
+  groups: IAssetDomainGroup[],
+  state: Pick<ILibraryBrowserState, 'expandedLibraries' | 'seededLibraries' | 'expandedGroups'>
+): void {
+  if (target.kind === 'library') {
+    state.seededLibraries.add(target.libraryId);
+    if (action === 'expand-all') {
+      state.expandedLibraries.add(target.libraryId);
+      expandGroups(state as ILibraryBrowserState, target.libraryId, groups);
+    } else {
+      collapseLibraryGroups(state as ILibraryBrowserState, target.libraryId);
+      state.expandedLibraries.delete(target.libraryId);
+    }
+    return;
+  }
+
+  const group = groups.find(g => g.name === target.domain);
+  if (!group) return;
+
+  if (target.kind === 'domain') {
+    const domainKey = groupKey(target.libraryId, group.name);
+    if (action === 'expand-all') {
+      state.expandedLibraries.add(target.libraryId);
+      state.expandedGroups.add(domainKey);
+      for (const sub of group.subdomains) {
+        state.expandedGroups.add(groupKey(target.libraryId, group.name, sub.name));
+      }
+    } else {
+      for (const sub of group.subdomains) {
+        state.expandedGroups.delete(groupKey(target.libraryId, group.name, sub.name));
+      }
+      state.expandedGroups.delete(domainKey);
+    }
+    return;
+  }
+
+  const subKey = groupKey(target.libraryId, target.domain, target.subdomain);
+  if (action === 'expand-all') {
+    state.expandedLibraries.add(target.libraryId);
+    state.expandedGroups.add(groupKey(target.libraryId, target.domain));
+    state.expandedGroups.add(subKey);
+  } else {
+    state.expandedGroups.delete(subKey);
   }
 }
 
@@ -236,10 +355,13 @@ function defaultState(options: ILibraryBrowserOptions, registry: LibraryRegistry
     selectedAssetId: undefined,
     search: '',
     kind: 'all',
+    expandedLibraries: new Set<string>(),
+    seededLibraries: new Set<string>(),
     expandedGroups: new Set<string>()
   };
   if (state.selectedLibraryId) {
-    seedExpandedGroups(state, registry.listAssets(state.selectedLibraryId));
+    state.expandedLibraries.add(state.selectedLibraryId);
+    seedExpandedGroups(state, state.selectedLibraryId, registry.listAssets(state.selectedLibraryId));
   }
   return state;
 }
@@ -262,10 +384,10 @@ function filteredAssets(registry: LibraryRegistry, libraryId: string, state: ILi
     });
 }
 
-function renderAssetRow(asset: ILibraryAsset, state: ILibraryBrowserState): string {
+function renderAssetRow(asset: ILibraryAsset, libraryId: string, state: ILibraryBrowserState): string {
   const bundled = isBundledAsset(asset);
   return `
-    <button type="button" class="properties-library-asset ${asset.id === state.selectedAssetId ? 'active' : ''}" data-asset-select="${esc(asset.id)}" title="${esc(asset.name)}">
+    <button type="button" class="properties-library-asset ${asset.id === state.selectedAssetId ? 'active' : ''}" data-asset-select="${esc(asset.id)}" data-library-id="${esc(libraryId)}" title="${esc(asset.name)}">
       <span class="properties-library-asset-name">${esc(asset.name)}</span>
       ${bundled ? badge(lbl('badge_bundled', 'Nativo Arestrix'), 'success') : `<span class="properties-library-asset-meta">${esc(kindLabel(asset.kind))}</span>`}
       ${badge(verdictLabel(asset.audit.verdict), verdictTone(asset.audit.verdict))}
@@ -275,6 +397,7 @@ function renderAssetRow(asset: ILibraryAsset, state: ILibraryBrowserState): stri
 
 function renderTaxonomyToggle(params: {
   attribute: 'data-library-domain-toggle' | 'data-library-subdomain-toggle';
+  libraryId: string;
   key: string;
   label: string;
   count: number;
@@ -285,7 +408,7 @@ function renderTaxonomyToggle(params: {
     ? 'properties-library-domain-toggle'
     : 'properties-library-subdomain-toggle';
   return `
-    <button type="button" class="properties-library-taxon-toggle ${toggleClass}" ${params.attribute}="${esc(groupKeyAttribute(params.key))}" aria-expanded="${params.expanded ? 'true' : 'false'}" title="${esc(`${params.label} (${params.count})`)}">
+    <button type="button" class="properties-library-taxon-toggle ${toggleClass}" ${params.attribute}="${esc(groupKeyAttribute(params.key))}" data-library-id="${esc(params.libraryId)}" aria-expanded="${params.expanded ? 'true' : 'false'}" title="${esc(`${params.label} (${params.count})`)}">
       <span class="properties-library-chevron" aria-hidden="true">${params.expanded ? '▾' : '▸'}</span>
       <span class="properties-library-taxon-name">${esc(params.label)}</span>
       <span class="properties-library-item-count">${params.count}</span>
@@ -293,18 +416,19 @@ function renderTaxonomyToggle(params: {
   `;
 }
 
-function renderAssetTree(assets: ILibraryAsset[], state: ILibraryBrowserState): string {
+function renderAssetTree(libraryId: string, assets: ILibraryAsset[], state: ILibraryBrowserState): string {
   if (assets.length === 0) {
     return `<div class="properties-library-assets-empty">${esc(lbl('tree_empty_assets', 'Nenhum asset. Importe um catálogo ou crie um derivado.'))}</div>`;
   }
 
   return groupAssetsByTaxonomy(assets).map(group => {
-    const domainKey = groupKey(group.name);
+    const domainKey = groupKey(libraryId, group.name);
     const domainExpanded = state.expandedGroups.has(domainKey);
     return `
       <div class="properties-library-taxon">
         ${renderTaxonomyToggle({
           attribute: 'data-library-domain-toggle',
+          libraryId,
           key: domainKey,
           label: group.name || lbl('tree_uncategorized_domain', 'Sem domínio'),
           count: group.total,
@@ -314,12 +438,13 @@ function renderAssetTree(assets: ILibraryAsset[], state: ILibraryBrowserState): 
         ${domainExpanded ? `
           <div class="properties-library-subtree">
             ${group.subdomains.map(subdomain => {
-              const subdomainKey = groupKey(group.name, subdomain.name);
+              const subdomainKey = groupKey(libraryId, group.name, subdomain.name);
               const subdomainExpanded = state.expandedGroups.has(subdomainKey);
               return `
                 <div class="properties-library-taxon">
                   ${renderTaxonomyToggle({
                     attribute: 'data-library-subdomain-toggle',
+                    libraryId,
                     key: subdomainKey,
                     label: subdomain.name || lbl('tree_uncategorized_subdomain', 'Sem subdomínio'),
                     count: subdomain.assets.length,
@@ -328,7 +453,7 @@ function renderAssetTree(assets: ILibraryAsset[], state: ILibraryBrowserState): 
                   })}
                   ${subdomainExpanded ? `
                     <div class="properties-library-assets">
-                      ${subdomain.assets.map(asset => renderAssetRow(asset, state)).join('')}
+                      ${subdomain.assets.map(asset => renderAssetRow(asset, libraryId, state)).join('')}
                     </div>
                   ` : ''}
                 </div>
@@ -356,19 +481,21 @@ function renderTree(registry: LibraryRegistry, options: ILibraryBrowserOptions, 
     const assets = filteredAssets(registry, library.id, state);
     const total = registry.listAssets(library.id).length;
     const isSelected = library.id === state.selectedLibraryId;
+    const isExpanded = state.expandedLibraries.has(library.id);
     const isBuiltin = library.isBuiltin;
     const kind = isBuiltin ? lbl('kind_builtin', 'Embutida') : library.kind === 'repository' ? lbl('kind_repository', 'Repositório') : lbl('kind_local', 'Local');
 
     return `
       <div class="properties-library-group">
-        <button type="button" class="properties-library-item ${isSelected ? 'active' : ''}" data-library-select="${esc(library.id)}">
+        <button type="button" class="properties-library-item ${isSelected ? 'active' : ''}" data-library-select="${esc(library.id)}" aria-expanded="${isExpanded ? 'true' : 'false'}">
+          <span class="properties-library-chevron" aria-hidden="true">${isExpanded ? '▾' : '▸'}</span>
           <span class="properties-library-item-name">${esc(library.name)}</span>
           ${badge(kind, isBuiltin ? 'success' : 'neutral')}
           <span class="properties-library-item-count">${total}</span>
         </button>
-        ${isSelected ? `
+        ${isExpanded ? `
           <div class="properties-library-tree-children">
-            ${renderAssetTree(assets, state)}
+            ${renderAssetTree(library.id, assets, state)}
           </div>
         ` : ''}
       </div>
@@ -464,12 +591,12 @@ function renderAssetDetail(asset: ILibraryAsset, library: ILibraryEntry | undefi
 
     <div class="properties-library-actions">
       ${showDownload ? `<button type="button" class="btn btn-primary-office" data-asset-action="download" data-asset-id="${esc(asset.id)}">${esc(lbl('action_download', 'Baixar e auditar'))}</button>` : ''}
-      ${asset.kind === 'mcp' && asset.audit.verdict !== 'REJECT' && !showDownload ? `<button type="button" class="btn btn-primary-office" data-asset-action="insert-mcp-vertex" data-asset-id="${esc(asset.id)}">${esc(lbl('action_insert_mcp_vertex', 'Inserir no grafo'))}</button>` : ''}
-      ${canInstall ? `<button type="button" class="btn ${showDownload || asset.kind === 'mcp' ? 'btn-secondary-office' : 'btn-primary-office'}" data-asset-action="install" data-asset-id="${esc(asset.id)}" ${installDisabled ? 'disabled' : ''}>${esc(lbl('action_install', 'Instalar no Workspace'))}</button>` : ''}
+      ${!showDownload && asset.audit.verdict !== 'REJECT' ? `<button type="button" class="btn btn-primary-office" data-asset-action="insert-asset" data-asset-id="${esc(asset.id)}">${esc(lbl('action_insert_asset', 'Inserir asset'))}</button>` : ''}
+      ${canInstall ? `<button type="button" class="btn btn-secondary-office" data-asset-action="install" data-asset-id="${esc(asset.id)}" ${installDisabled ? 'disabled' : ''}>${esc(lbl('action_install', 'Instalar no Workspace'))}</button>` : ''}
       <button type="button" class="btn btn-secondary-office" data-asset-action="audit" data-asset-id="${esc(asset.id)}">${esc(lbl('action_audit', 'Reauditar'))}</button>
       <button type="button" class="btn btn-secondary-office" data-asset-action="edit" data-asset-id="${esc(asset.id)}">${esc(lbl('action_derive', 'Editar'))}</button>
       ${canRestoreBuiltin ? `<button type="button" class="btn btn-secondary-office" data-asset-action="restore-builtin" data-asset-id="${esc(asset.id)}">${esc(lbl('action_restore_builtin', 'Restaurar padrão de instalação'))}</button>` : ''}
-      <button type="button" class="btn btn-secondary-office properties-library-action-danger" data-asset-action="remove" data-asset-id="${esc(asset.id)}">${esc(lbl('action_remove_asset', 'Remover asset'))}</button>
+      ${!(library?.isBuiltin || asset.libraryId === 'library-arestrix') ? `<button type="button" class="btn btn-secondary-office properties-library-action-danger" data-asset-action="remove" data-asset-id="${esc(asset.id)}">${esc(lbl('action_remove_asset', 'Remover asset'))}</button>` : ''}
     </div>
   `;
 }
@@ -634,16 +761,93 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
   const search = root.querySelector<HTMLInputElement>('[data-library-search]');
   const filter = root.querySelector<HTMLSelectElement>('[data-library-filter]');
 
-  const selectedAssets = (): ILibraryAsset[] =>
-    state.selectedLibraryId ? options.registry.listAssets(state.selectedLibraryId) : [];
-
-  /** Expande os grupos que sobreviveram ao filtro, para os resultados ficarem visíveis. */
+  /** Expande as bibliotecas e grupos que sobreviveram ao filtro, para os resultados ficarem visíveis. */
   const expandVisibleGroups = (): void => {
-    if (!state.selectedLibraryId) return;
-    expandGroups(state, groupAssetsByTaxonomy(filteredAssets(options.registry, state.selectedLibraryId, state)));
+    for (const library of options.registry.list(options.scope)) {
+      const visible = filteredAssets(options.registry, library.id, state);
+      if (visible.length > 0) {
+        state.expandedLibraries.add(library.id);
+        expandGroups(state, library.id, groupAssetsByTaxonomy(visible));
+      }
+    }
+  };
+
+  let activeMenu: HTMLElement | null = null;
+  let activeMenuCleanup: (() => void) | null = null;
+
+  const closeContextMenu = (): void => {
+    if (activeMenuCleanup) {
+      activeMenuCleanup();
+      activeMenuCleanup = null;
+    }
+    if (activeMenu) {
+      activeMenu.remove();
+      activeMenu = null;
+    }
+  };
+
+  const openContextMenu = (
+    event: MouseEvent,
+    target: LibraryTreeContextTarget,
+    groups: IAssetDomainGroup[],
+    actions: LibraryTreeContextAction[]
+  ): void => {
+    closeContextMenu();
+    if (actions.length === 0 || typeof document === 'undefined') return;
+
+    const menu = document.createElement('div');
+    menu.className = 'properties-library-context-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = actions.map(action => {
+      const label = action === 'expand-all'
+        ? lbl('tree_expand_all', 'Expandir todos')
+        : lbl('tree_collapse_all', 'Recolher todos');
+      return `<button type="button" class="properties-library-context-item" role="menuitem" data-tree-context-action="${action}">${esc(label)}</button>`;
+    }).join('');
+
+    menu.style.visibility = 'hidden';
+    document.body.appendChild(menu);
+
+    const rect = menu.getBoundingClientRect();
+    const maxX = Math.max(8, (window.innerWidth || 1024) - rect.width - 8);
+    const maxY = Math.max(8, (window.innerHeight || 768) - rect.height - 8);
+    menu.style.left = `${Math.min(Math.max(8, event.clientX), maxX)}px`;
+    menu.style.top = `${Math.min(Math.max(8, event.clientY), maxY)}px`;
+    menu.style.visibility = 'visible';
+
+    menu.addEventListener('click', (clickEvent) => {
+      const btn = (clickEvent.target as HTMLElement | null)?.closest<HTMLButtonElement>('[data-tree-context-action]');
+      const action = btn?.dataset.treeContextAction as LibraryTreeContextAction | undefined;
+      closeContextMenu();
+      if (!action) return;
+      applyTreeNodeContextAction(target, action, groups, state);
+      renderTreeInto();
+    });
+
+    const onOutsidePointer = (ev: Event) => {
+      const el = ev.target as Node | null;
+      if (el && menu.contains(el)) return;
+      closeContextMenu();
+    };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') closeContextMenu();
+    };
+    const onScroll = () => closeContextMenu();
+
+    document.addEventListener('mousedown', onOutsidePointer, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    tree?.addEventListener('scroll', onScroll, { passive: true });
+
+    activeMenu = menu;
+    activeMenuCleanup = () => {
+      document.removeEventListener('mousedown', onOutsidePointer, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+      tree?.removeEventListener('scroll', onScroll);
+    };
   };
 
   const renderTreeInto = (): void => {
+    closeContextMenu();
     if (!tree) return;
     const scrollTop = tree.scrollTop;
     tree.innerHTML = renderTree(options.registry, options, state);
@@ -657,7 +861,7 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
 
   search?.addEventListener('input', () => {
     state.search = search.value;
-    expandVisibleGroups();
+    if (state.search.trim() || state.kind !== 'all') expandVisibleGroups();
     renderTreeInto();
   });
 
@@ -665,8 +869,53 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
     state.kind = filter.value === 'skill' || filter.value === 'mcp' || filter.value === 'agent-template' || filter.value === 'pipeline'
       ? filter.value
       : 'all';
-    expandVisibleGroups();
+    if (state.search.trim() || state.kind !== 'all') expandVisibleGroups();
     renderTreeInto();
+  });
+
+  tree?.addEventListener('contextmenu', (event) => {
+    const el = event.target as HTMLElement | null;
+    if (!el) return;
+
+    const librarySelect = el.closest<HTMLElement>('[data-library-select]');
+    const domainToggle = el.closest<HTMLElement>('[data-library-domain-toggle]');
+    const subdomainToggle = el.closest<HTMLElement>('[data-library-subdomain-toggle]');
+
+    let contextTarget: LibraryTreeContextTarget | null = null;
+    if (librarySelect?.dataset.librarySelect) {
+      contextTarget = { kind: 'library', libraryId: librarySelect.dataset.librarySelect };
+    } else if (domainToggle?.dataset.libraryDomainToggle) {
+      const parsed = parseGroupKey(readGroupKey(domainToggle.dataset.libraryDomainToggle));
+      if (parsed.libraryId) {
+        contextTarget = { kind: 'domain', libraryId: parsed.libraryId, domain: parsed.domain };
+      }
+    } else if (subdomainToggle?.dataset.librarySubdomainToggle) {
+      const parsed = parseGroupKey(readGroupKey(subdomainToggle.dataset.librarySubdomainToggle));
+      if (parsed.libraryId && parsed.subdomain !== undefined) {
+        contextTarget = {
+          kind: 'subdomain',
+          libraryId: parsed.libraryId,
+          domain: parsed.domain,
+          subdomain: parsed.subdomain
+        };
+      }
+    }
+
+    if (!contextTarget) {
+      closeContextMenu();
+      return;
+    }
+
+    const groups = groupAssetsByTaxonomy(filteredAssets(options.registry, contextTarget.libraryId, state));
+    const actions = getTreeNodeContextActions(contextTarget, groups, state);
+    if (actions.length === 0) {
+      closeContextMenu();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    openContextMenu(event, contextTarget, groups, actions);
   });
 
   root.addEventListener('click', (event) => {
@@ -690,11 +939,21 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
     const librarySelect = target.closest<HTMLElement>('[data-library-select]');
     if (librarySelect) {
       const id = librarySelect.dataset.librarySelect;
-      if (id && id !== state.selectedLibraryId) {
+      if (id) {
+        const wasExpanded = state.expandedLibraries.has(id);
         state.selectedLibraryId = id;
         state.selectedAssetId = undefined;
-        seedExpandedGroups(state, selectedAssets());
-        if (state.search.trim() || state.kind !== 'all') expandVisibleGroups();
+        if (wasExpanded) {
+          state.expandedLibraries.delete(id);
+        } else {
+          state.expandedLibraries.add(id);
+          if (!state.seededLibraries.has(id)) {
+            seedExpandedGroups(state, id, options.registry.listAssets(id));
+          }
+          if (state.search.trim() || state.kind !== 'all') {
+            expandGroups(state, id, groupAssetsByTaxonomy(filteredAssets(options.registry, id, state)));
+          }
+        }
         rerender();
       }
       return;
@@ -703,7 +962,9 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
     const assetSelect = target.closest<HTMLElement>('[data-asset-select]');
     if (assetSelect) {
       const id = assetSelect.dataset.assetSelect;
+      const libId = assetSelect.dataset.libraryId;
       if (id) {
+        if (libId) state.selectedLibraryId = libId;
         state.selectedAssetId = id;
         rerender();
       }
@@ -766,38 +1027,54 @@ async function handleAssetAction(
     return;
   }
 
-  if (action === 'insert-mcp-vertex') {
-    const asset = options.registry.getAsset(assetId);
-    if (!asset || asset.payload.kind !== 'mcp') {
-      notify('error', lbl('msg_edit_failed', 'Não foi possível criar o vértice MCP.'));
+  if (action === 'insert-asset' || action === 'insert-mcp-vertex') {
+    const source = options.registry.getAsset(assetId);
+    if (!source) {
+      notify('error', lbl('msg_edit_failed', 'Não foi possível inserir o ativo no grafo.'));
+      rerender();
+      return;
+    }
+    if (source.audit.verdict === 'REJECT') {
+      notify('warning', lbl('msg_insert_rejected', 'Ativo reprovado na auditoria não pode ser inserido no grafo.'));
       rerender();
       return;
     }
     if (!options.graph) {
-      notify('warning', lbl('msg_edit_no_graph', 'Abra um projeto para inserir o vértice MCP no grafo.'));
+      notify('warning', lbl('msg_edit_no_graph', 'Abra um projeto para inserir o ativo no grafo.'));
       rerender();
       return;
     }
-    if (asset.status !== 'installed') {
-      const installed = await service.installAsset(assetId, { allowCaution: true });
+
+    // Regra de imutabilidade: ativos da Biblioteca Arestrix são sempre copiados
+    // primeiro para "Minha biblioteca" antes de instalar ou inserir no grafo.
+    const workingAsset = await ensureCopyInOwnLibrary(service, options, state, source, rerender);
+    if (!workingAsset) {
+      rerender();
+      return;
+    }
+
+    if ((workingAsset.payload.kind === 'mcp' || workingAsset.payload.kind === 'skill') && workingAsset.status !== 'installed') {
+      const installed = await service.installAsset(workingAsset.id, { allowCaution: true });
       if (!installed.ok) {
-        notify('warning', installed.reason || lbl('msg_install_failed', 'Não foi possível instalar o servidor MCP no Workspace.'));
+        notify('warning', installed.reason || lbl('msg_install_failed', 'Não foi possível instalar o asset no Workspace.'));
         rerender();
         return;
       }
     }
-    const node = buildEditableNodeFromAsset(asset, options.graph, asset.name);
+    const latestAsset = options.registry.getAsset(workingAsset.id) || workingAsset;
+    const cleanLabel = source.name.replace(/\s*\(c[oó]pia\)$/i, '').trim() || source.name;
+    const node = buildNodeFromLibraryAsset(latestAsset, options.graph, cleanLabel);
     if (!node) {
-      notify('error', lbl('msg_edit_failed', 'Não foi possível criar o vértice MCP.'));
+      notify('error', lbl('msg_edit_failed', 'Não foi possível criar o vértice a partir do ativo.'));
       rerender();
       return;
     }
-    node.label = asset.name;
     options.graph.commandManager.execute(new AddNodeCommand(options.graph, node));
     globalEventBus.emit('node:selected', node);
-    notify('success', lbl('msg_mcp_vertex_inserted', 'Vértice MCP "{{label}}" inserido no grafo e instalado no Workspace.')
+    notify('success', lbl('msg_asset_inserted', 'Vértice "{{label}}" inserido no grafo.')
       .replace('{{label}}', node.label));
     rerender();
+    options.onReturnToStudio?.();
     return;
   }
 
@@ -847,6 +1124,13 @@ async function handleAssetAction(
   }
 
   if (action === 'remove') {
+    const targetAsset = options.registry.getAsset(assetId);
+    if (!targetAsset) return;
+    if (targetAsset.libraryId === 'library-arestrix' || options.registry.get(targetAsset.libraryId)?.isBuiltin) {
+      notify('warning', lbl('msg_builtin_readonly', 'Ativos da Biblioteca Arestrix são somente leitura e não podem ser removidos ou editados.'));
+      rerender();
+      return;
+    }
     if (!confirmAction(lbl('msg_remove_asset_confirm', 'Remover este asset da biblioteca?'))) return;
     options.registry.removeAsset(assetId);
     await service.persist('workspace');
@@ -895,6 +1179,65 @@ function nodeLibrarySource(asset: ILibraryAsset): NodeLibrarySource {
     originUrl: asset.origin?.url,
     originLicense: asset.origin?.license
   };
+}
+
+/**
+ * Cria um vértice livre no grafo a partir de qualquer ativo da biblioteca
+ * (MCP, skill, template de agente ou pipeline), pronto para ser conectado na tela do Studio.
+ */
+export function buildNodeFromLibraryAsset(
+  asset: ILibraryAsset,
+  graph: Pick<Graph, 'getAllNodes'>,
+  labelOverride?: string
+): INodeData | null {
+  if (asset.payload.kind === 'skill') {
+    const id = libraryNodeId(asset.id);
+    const label = labelOverride || asset.name;
+    return {
+      id,
+      label,
+      type: 'agent',
+      position: libraryAssetNodePosition(graph),
+      inputs: [{ id: `${id}_in_0`, name: 'in', direction: 'input', type: 'flow' }],
+      outputs: [{ id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' }],
+      parameters: {},
+      customLambdaBody: '',
+      agentSettings: {
+        inheritSandbox: true,
+        inheritModel: true,
+        inheritCodeMode: true,
+        inheritMemory: true,
+        activeSkillId: asset.id,
+        skills: [
+          {
+            id: asset.id,
+            name: asset.name,
+            description: asset.description,
+            markdownContent: asset.payload.markdownContent,
+            systemPrompt: asset.payload.systemPrompt,
+            tools: [...(asset.payload.tools || [])],
+            license: asset.license,
+            updatedAt: asset.updatedAt,
+            sourceUrl: asset.provenance?.url,
+            audit: {
+              hash: asset.audit.hash,
+              verdict: asset.audit.verdict,
+              riskScore: asset.audit.riskScore,
+              policyVersion: asset.audit.policyVersion,
+              auditedAt: asset.audit.auditedAt || asset.updatedAt
+            }
+          }
+        ]
+      },
+      presetLocked: false,
+      origin: asset.origin,
+      librarySource: nodeLibrarySource(asset)
+    };
+  }
+  const node = buildEditableNodeFromAsset(asset, graph, labelOverride || asset.name);
+  if (!node) return null;
+  node.label = labelOverride || asset.name;
+  return node;
 }
 
 /**
@@ -1035,9 +1378,60 @@ function openSkillAssetEditor(
 }
 
 /**
- * "Editar" mantém o asset original imutável: cria um derivado em Minha
- * biblioteca (quando necessário), abre o editor próprio do tipo do ativo e,
- * para vértices, insere a cópia editável no grafo antes de abrir o modal.
+ * Garante que qualquer ativo da Biblioteca Arestrix (ou outra biblioteca somente
+ * leitura) seja copiado primeiro para "Minha biblioteca" antes de editar ou inserir.
+ * Nunca editamos nem mutamos os ativos originais da Biblioteca Arestrix.
+ */
+export async function ensureCopyInOwnLibrary(
+  service: LibraryService,
+  options: ILibraryBrowserOptions,
+  state: ILibraryBrowserState,
+  source: ILibraryAsset,
+  rerender: () => void
+): Promise<ILibraryAsset | null> {
+  const ownLibrary = service.ensureOwnLibrary('workspace');
+  if (!ownLibrary) {
+    notify('error', lbl('msg_derive_failed', 'Não foi possível preparar Minha biblioteca.'));
+    return null;
+  }
+  const isAlreadyInOwnLibrary = source.libraryId === ownLibrary.id;
+  const isBuiltinSource = source.libraryId === 'library-arestrix' || Boolean(options.registry.get(source.libraryId)?.isBuiltin);
+
+  let working: ILibraryAsset | undefined = isAlreadyInOwnLibrary
+    ? source
+    : (!isBuiltinSource && source.derivedFrom
+        ? source
+        : options.registry.listAssets(ownLibrary.id).find(candidate =>
+            candidate.derivedFrom?.libraryId === source.libraryId &&
+            candidate.derivedFrom?.assetId === source.id
+          ));
+
+  if (!working) {
+    const derived = await service.deriveAsset(source.id, { libraryId: ownLibrary.id });
+    if (!derived) {
+      notify('error', lbl('msg_derive_failed', 'Não foi possível copiar o ativo para Minha biblioteca.'));
+      return null;
+    }
+    working = derived;
+    notify('success', lbl('msg_derived', 'Cópia criada em Minha biblioteca: {{name}}.')
+      .replace('{{name}}', derived.name));
+  }
+
+  if (working.id !== state.selectedAssetId || working.libraryId !== state.selectedLibraryId) {
+    state.selectedLibraryId = working.libraryId;
+    state.selectedAssetId = working.id;
+    state.expandedLibraries.add(working.libraryId);
+    state.expandedGroups.add(groupKey(working.libraryId, assetDomain(working)));
+    state.expandedGroups.add(groupKey(working.libraryId, assetDomain(working), assetSubdomain(working)));
+    rerender();
+  }
+  return working;
+}
+
+/**
+ * "Editar" mantém o asset original imutável: copia primeiro para Minha
+ * biblioteca (quando ainda não estiver lá), abre o editor próprio do tipo do
+ * ativo e, para vértices, insere a cópia editável no grafo antes de abrir o modal.
  */
 async function editLibraryAsset(
   service: LibraryService,
@@ -1057,31 +1451,8 @@ async function editLibraryAsset(
     return;
   }
 
-  // Reaproveita a cópia editável já existente; só deriva quando ainda não há
-  // uma. O original nunca é alterado.
-  let editable: ILibraryAsset | undefined = source.derivedFrom
-    ? source
-    : options.registry.listAssets().find(candidate =>
-        candidate.derivedFrom?.libraryId === source.libraryId &&
-        candidate.derivedFrom?.assetId === source.id
-      );
-  if (!editable) {
-    const derived = await service.deriveAsset(assetId);
-    if (!derived) {
-      notify('error', lbl('msg_derive_failed', 'Não foi possível criar o derivado.'));
-      return;
-    }
-    editable = derived;
-    notify('success', lbl('msg_derived', 'Derivado criado em Minha biblioteca: {{name}}.')
-      .replace('{{name}}', derived.name));
-  }
-  if (editable.id !== state.selectedAssetId || editable.libraryId !== state.selectedLibraryId) {
-    state.selectedLibraryId = editable.libraryId;
-    state.selectedAssetId = editable.id;
-    state.expandedGroups.add(groupKey(assetDomain(editable)));
-    state.expandedGroups.add(groupKey(assetDomain(editable), assetSubdomain(editable)));
-    rerender();
-  }
+  const editable = await ensureCopyInOwnLibrary(service, options, state, source, rerender);
+  if (!editable) return;
 
   if (editable.payload.kind === 'skill') {
     openSkillAssetEditor(service, editable, rerender);
@@ -1095,13 +1466,14 @@ async function editLibraryAsset(
       if (node) {
         options.graph.commandManager.execute(new AddNodeCommand(options.graph, node));
         globalEventBus.emit('node:selected', node);
+        options.onReturnToStudio?.();
         notify('success', lbl('msg_edit_vertex', 'Vértice MCP editável "{{label}}" criado no grafo.')
           .replace('{{label}}', node.label));
         return;
       }
     }
     notify('info', lbl('msg_edit_mcp',
-      'Cópia criada. Edite o servidor MCP em Workspace > Servidores MCP.'));
+      'Cópia criada em Minha biblioteca. Edite o servidor MCP em Workspace > Servidores MCP.'));
     return;
   }
   if (!isVertex || !options.graph) {
@@ -1117,6 +1489,7 @@ async function editLibraryAsset(
   }
   options.graph.commandManager.execute(new AddNodeCommand(options.graph, node));
   globalEventBus.emit('node:selected', node);
+  options.onReturnToStudio?.();
   globalEventBus.emit('node:open-model-modal', { nodeId: node.id, tab: 'prompt' });
   notify('success', lbl('msg_edit_vertex', 'Vértice editável "{{label}}" criado no grafo.')
     .replace('{{label}}', node.label));
@@ -1189,7 +1562,8 @@ async function handleLibraryAction(
         if (result) {
           state.selectedLibraryId = result.library.id;
           state.selectedAssetId = undefined;
-          seedExpandedGroups(state, options.registry.listAssets(result.library.id));
+          state.expandedLibraries.add(result.library.id);
+          seedExpandedGroups(state, result.library.id, options.registry.listAssets(result.library.id));
           notify(
             result.rejected.length > 0 ? 'warning' : 'success',
             lbl('msg_import_file_result', 'Biblioteca importada: {{imported}} assets; {{rejected}} rejeitados.')
@@ -1213,7 +1587,8 @@ async function handleLibraryAction(
     if (result) {
       state.selectedLibraryId = result.library.id;
       state.selectedAssetId = undefined;
-      seedExpandedGroups(state, options.registry.listAssets(result.library.id));
+      state.expandedLibraries.add(result.library.id);
+      seedExpandedGroups(state, result.library.id, options.registry.listAssets(result.library.id));
       notify('success', lbl('msg_clone_success', 'Biblioteca clonada: {{name}}.').replace('{{name}}', result.library.name));
     } else {
       notify('error', lbl('msg_clone_failed', 'Não foi possível clonar a biblioteca.'));
@@ -1245,7 +1620,10 @@ async function handleLibraryAction(
     const next = options.registry.list(options.scope)[0];
     state.selectedLibraryId = next?.id;
     state.selectedAssetId = undefined;
-    if (next) seedExpandedGroups(state, options.registry.listAssets(next.id));
+    if (next) {
+      state.expandedLibraries.add(next.id);
+      seedExpandedGroups(state, next.id, options.registry.listAssets(next.id));
+    }
     notify('success', lbl('msg_library_removed', 'Biblioteca removida.'));
     rerender();
   }

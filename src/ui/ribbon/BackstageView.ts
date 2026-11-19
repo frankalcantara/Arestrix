@@ -1604,7 +1604,8 @@ export class BackstageView {
       if (container) {
         bindLibraryBrowser(container as HTMLElement, {
           registry: LibraryRegistry.getInstance(),
-          graph: this.graph
+          graph: this.graph,
+          onReturnToStudio: () => this.close()
         });
       }
     }
