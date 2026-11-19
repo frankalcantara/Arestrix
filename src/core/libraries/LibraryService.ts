@@ -1,6 +1,10 @@
 import type { IMcpServerConfig, INodeSkill } from '../types.ts';
 import { sanitizeEnvReferences } from '../env/EnvironmentManager.ts';
-import { BUILTIN_LIBRARY_SKILLS } from './BuiltinLibraryCatalog.ts';
+import {
+  BUILTIN_LIBRARY_SKILLS,
+  getBundledFactoryAssetById,
+  getBundledFactoryAssets
+} from './BuiltinLibraryCatalog.ts';
 import { WorkspaceManager } from '../workspace/WorkspaceManager.ts';
 import type { IWorkspaceApprovedSkill } from '../workspace/types.ts';
 import { LibraryRegistry } from './LibraryRegistry.ts';
@@ -74,7 +78,9 @@ export class LibraryService {
     private readonly gate: LibraryAuditGate = LibraryAuditGate.getInstance(),
     private readonly store: LibraryStore = new LibraryStore(workspace),
     private readonly githubSource: GitHubSourceAdapter = GitHubSourceAdapter.getInstance()
-  ) {}
+  ) {
+    this.ensureBundledAssetsPresent();
+  }
 
   public static getInstance(): LibraryService {
     if (!LibraryService.instance) {
@@ -85,9 +91,66 @@ export class LibraryService {
 
   public async hydrate(scope: LibraryScope = 'workspace', projectId?: string): Promise<boolean> {
     const state = await this.store.load(scope, projectId);
-    if (!state) return false;
+    if (!state) {
+      this.ensureBundledAssetsPresent();
+      return false;
+    }
     this.registry.restore(state, false);
+    this.ensureBundledAssetsPresent();
     return true;
+  }
+
+  /**
+   * Recarrega o snapshot do Workspace substituindo o estado em memoria. Usado
+   * quando outra superficie (por exemplo o MCP nativo/stdio) grava
+   * `.workspace/libraries.json` durante a sessao.
+   */
+  public async reloadFromWorkspace(scope: LibraryScope = 'workspace', projectId?: string): Promise<boolean> {
+    const state = await this.store.load(scope, projectId);
+    if (!state) {
+      this.ensureBundledAssetsPresent();
+      return false;
+    }
+    this.registry.restore(state, true);
+    this.ensureBundledAssetsPresent();
+    return true;
+  }
+
+  private ensureBundledAssetsPresent(): void {
+    if (typeof this.registry.ensureBuiltinAssets === 'function') {
+      this.registry.ensureBuiltinAssets();
+    }
+  }
+
+  /**
+   * Retorna um clone imutável de fábrica de um asset embutido (`library-arestrix`),
+   * imune a mutações feitas em tempo de execução.
+   */
+  public getInstallDefaultAsset(assetId: string): ILibraryAsset | null {
+    return getBundledFactoryAssetById(assetId, BUILTIN_LIBRARY_ID);
+  }
+
+  /**
+   * Restaura um asset embutido individual para o estado original de instalação.
+   */
+  public async restoreBuiltinAsset(assetId: string): Promise<ILibraryAsset | null> {
+    const factoryAsset = this.getInstallDefaultAsset(assetId);
+    if (!factoryAsset) return null;
+    const saved = this.registry.upsertAsset(factoryAsset);
+    if (!saved) return null;
+    await this.persist('workspace');
+    return saved;
+  }
+
+  /**
+   * Remove assets não-embutidos/customizados de `library-arestrix`, restaura
+   * todas as skills embutidas e os 322 vértices de agentes para `available`, e persiste.
+   */
+  public async resetBuiltinLibrary(): Promise<{ restoredCount: number; removedCount: number }> {
+    const factoryAssets = getBundledFactoryAssets(BUILTIN_LIBRARY_ID);
+    const result = this.registry.resetBuiltinAssets(factoryAssets);
+    await this.persist('workspace');
+    return result;
   }
 
   public async persist(scope: LibraryScope = 'workspace', projectId?: string): Promise<boolean> {
@@ -297,6 +360,10 @@ export class LibraryService {
       name,
       description: source.description,
       category: source.category,
+      domain: source.domain,
+      subdomain: source.subdomain,
+      bundledInProduct: source.bundledInProduct,
+      origin: source.origin ? { ...source.origin } : undefined,
       version: source.version,
       license: source.license,
       audit,
@@ -488,6 +555,12 @@ export class LibraryService {
         ? 'Pipeline empacotado como agente visual.'
         : 'Template de vértice importado do catálogo.'),
       category: template.category || (isPipeline ? 'Agentes' : 'Plugins Customizados'),
+      domain: template.domain ?? existing?.domain,
+      subdomain: template.subdomain ?? existing?.subdomain,
+      bundledInProduct: template.bundledInProduct ?? existing?.bundledInProduct,
+      origin: template.origin
+        ? JSON.parse(JSON.stringify(template.origin))
+        : (existing?.origin ? JSON.parse(JSON.stringify(existing.origin)) : undefined),
       version,
       license,
       audit,
@@ -937,6 +1010,10 @@ export class LibraryService {
         name: asset.name,
         description: asset.description,
         category: asset.category,
+        domain: asset.domain,
+        subdomain: asset.subdomain,
+        bundledInProduct: asset.bundledInProduct,
+        origin: asset.origin ? { ...asset.origin } : undefined,
         version: asset.version,
         license: asset.license,
         audit,
@@ -1195,19 +1272,20 @@ export class LibraryService {
       };
     }
 
-    if (current.kind === 'agent-template') {
-      const templatePatch = (patch && patch.kind === 'agent-template' ? patch : {}) as Partial<typeof current>;
+    if (current.kind === 'agent-template' || current.kind === 'pipeline') {
+      const templatePatch = (patch && patch.kind === current.kind ? patch : {}) as Partial<typeof current>;
+      const nextTemplate = JSON.parse(JSON.stringify(templatePatch.template || current.template));
+      if (current.template.origin && !nextTemplate.origin) {
+        nextTemplate.origin = JSON.parse(JSON.stringify(current.template.origin));
+      }
+      if (current.template.domain && !nextTemplate.domain) nextTemplate.domain = current.template.domain;
+      if (current.template.subdomain && !nextTemplate.subdomain) nextTemplate.subdomain = current.template.subdomain;
+      if (current.template.bundledInProduct !== undefined && nextTemplate.bundledInProduct === undefined) {
+        nextTemplate.bundledInProduct = current.template.bundledInProduct;
+      }
       return {
-        kind: 'agent-template',
-        template: JSON.parse(JSON.stringify(templatePatch.template || current.template))
-      };
-    }
-
-    if (current.kind === 'pipeline') {
-      const pipelinePatch = (patch && patch.kind === 'pipeline' ? patch : {}) as Partial<typeof current>;
-      return {
-        kind: 'pipeline',
-        template: JSON.parse(JSON.stringify(pipelinePatch.template || current.template))
+        kind: current.kind,
+        template: nextTemplate
       };
     }
 

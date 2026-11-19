@@ -3,7 +3,7 @@ import { ProjectManager } from '../../core/ProjectManager.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
 import { LibraryRegistry, type LibraryScope } from '../../core/libraries/LibraryRegistry.ts';
 import { ProjectLibraryStore } from '../../core/libraries/ProjectLibraryStore.ts';
-import { bindLibraryBrowser, renderLibraryBrowser } from '../libraries/LibraryTree.ts';
+import { globalEventBus } from '../../core/EventBus.ts';
 import { DEFAULT_PIPELINE_DEFAULTS } from '../../core/types.ts';
 import { MEMORY_SCENARIOS, memoryScenarioOf } from '../../core/memory/MemoryScenarios.ts';
 import { claimAgentKeyFromValue, claimExtractionEnabled, memoryModeOf } from '../../core/memory/MemoryConfig.ts';
@@ -222,7 +222,11 @@ function buildLibrariesSection(context: IPropertiesContext, scope: LibraryScope)
         <p class="properties-hint">${escapeHtml(label('libraries.add_source_hint', 'Depois de salvar, selecione a biblioteca criada abaixo e clique em Sincronizar GitHub para ler o manifesto; os assets são baixados e auditados sob demanda.'))}</p>
       </div>
 
-      ${canBrowse ? renderLibraryBrowser({ registry: context.libraryRegistry!, scope }) : ''}
+      ${canBrowse ? `
+        <div class="properties-subsection-title">${escapeHtml(label('libraries.browse_title', 'Biblioteca de Ativos'))}</div>
+        ${note(label('libraries.browse_hint', 'A instalação, a auditoria e a remoção de assets acontecem na página Biblioteca de Ativos, no Backstage.'), 'info')}
+        <button type="button" class="btn btn-primary-office" id="properties-open-library-page-${escapeHtml(scope)}">${escapeHtml(label('libraries.browse_open', 'Abrir Biblioteca de Ativos'))}</button>
+      ` : ''}
 
       <div class="properties-subsection-title">${escapeHtml(label('libraries.create_title', 'Criar nova biblioteca local'))}</div>
       <div class="form-row-grid properties-form-grid">
@@ -242,7 +246,11 @@ function buildLibrariesSection(context: IPropertiesContext, scope: LibraryScope)
       : undefined,
     keepOpenOnSave: true,
     bind: canBrowse
-      ? (root) => bindLibraryBrowser(root, { registry: context.libraryRegistry!, scope })
+      ? (root) => {
+          root.querySelector(`#properties-open-library-page-${scope}`)?.addEventListener('click', () => {
+            globalEventBus.emit('backstage:open', { section: 'library' });
+          });
+        }
       : undefined
   };
 }

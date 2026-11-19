@@ -35,6 +35,7 @@ const std::vector<Server>& serversForLang(rt::RuntimeLang lang) {
         v.push_back(makeTimeServer(lang));
         v.push_back(makeGitServer(lang));
         v.push_back(makeSqliteServer(lang));
+        v.push_back(makeLibraryServer(lang));
         if (lang == rt::RuntimeLang::En) {
             // make*Server monta description (pt) e descriptionEn (en); para o catalogo em ingles
             // a descricao principal passa a ser a inglesa.

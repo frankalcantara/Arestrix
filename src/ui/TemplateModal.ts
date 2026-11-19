@@ -489,17 +489,19 @@ export class TemplateModal {
 
     // Inserir template vindo da biblioteca
     this.overlay.querySelector('#btn-library-templates')?.addEventListener('click', () => {
+      this.hide();
       const backstage = BackstageView.getInstance();
       if (backstage) {
-        backstage.open('library');
+        void backstage.open('library');
       }
     });
 
     // Inserir pipeline vindo da biblioteca como agente
     this.overlay.querySelector('#btn-library-pipelines')?.addEventListener('click', () => {
+      this.hide();
       const backstage = BackstageView.getInstance();
       if (backstage) {
-        backstage.open('library');
+        void backstage.open('library');
       }
     });
 
@@ -670,9 +672,10 @@ export class TemplateModal {
 
     // Publicar o pipeline atual como nova versão de um asset da biblioteca
     this.overlay.querySelector('#btn-publish-pipeline-version')?.addEventListener('click', () => {
+      this.hide();
       const backstage = BackstageView.getInstance();
       if (backstage) {
-        backstage.open('library');
+        void backstage.open('library');
       }
     });
 

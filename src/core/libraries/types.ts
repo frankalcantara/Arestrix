@@ -1,4 +1,4 @@
-import type { IMcpServerConfig, IMcpToolDefinition, INodeSkill } from '../types.ts';
+import type { IAssetOriginMetadata, IMcpServerConfig, IMcpToolDefinition, INodeSkill } from '../types.ts';
 import type { ISerializedTemplatePlugin } from '../templates/AgentTemplateTypes.ts';
 
 /**
@@ -153,6 +153,13 @@ export interface ILibraryAsset {
   name: string;
   description: string;
   category: string;
+  domain?: string;
+  subdomain?: string;
+  icon?: string;
+  bundledInProduct?: boolean;
+  origin?: IAssetOriginMetadata;
+  qualityScore?: number;
+  selectionScore?: number;
   version: string;
   license: string;
   status: LibraryAssetStatus;

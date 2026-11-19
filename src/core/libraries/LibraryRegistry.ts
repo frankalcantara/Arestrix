@@ -1,4 +1,12 @@
 import { EventBus, globalEventBus } from '../EventBus.ts';
+import {
+  BUNDLED_AGENT_VERTICES,
+  BUNDLED_MCP_SERVERS,
+  bundledAgentVertexToLibraryAsset,
+  bundledMcpToLibraryAsset,
+  compactLibraryStateForStorage,
+  getBundledSkillAssets
+} from './BuiltinLibraryCatalog.ts';
 import type {
   ILibraryAsset,
   ILibraryEntry,
@@ -55,6 +63,7 @@ export class LibraryRegistry {
   private constructor(bus: EventBus = globalEventBus) {
     this.bus = bus;
     this.loadPersistedConfig();
+    this.hydrateBuiltinAssets();
   }
 
   public static getInstance(bus: EventBus = globalEventBus): LibraryRegistry {
@@ -212,13 +221,13 @@ export class LibraryRegistry {
   // --- Snapshot / persistência ---
 
   public snapshot(): ILibraryState {
-    return {
+    return compactLibraryStateForStorage({
       version: 2,
       libraries: this.list().map(library => ({ ...library })),
       assets: this.listAssets().map(asset => ({ ...asset })),
       sources: this.listSources(),
       updatedAt: new Date().toISOString()
-    };
+    });
   }
 
   public restore(state: ILibraryState | null | undefined, replace = true): void {
@@ -255,8 +264,45 @@ export class LibraryRegistry {
         else this.sources[index] = source;
       }
     }
+    this.hydrateBuiltinAssets();
     this.savePersistedConfig();
     this.bus.emit('library:changed');
+  }
+
+  public ensureBuiltinAssets(): number {
+    return this.hydrateBuiltinAssets();
+  }
+
+  public resetBuiltinAssets(factoryAssets: ILibraryAsset[]): { restoredCount: number; removedCount: number } {
+    const factoryIds = new Set(factoryAssets.map(asset => asset.id));
+    const beforeCount = this.assets.length;
+    this.assets = this.assets.filter(asset =>
+      asset.libraryId !== BUILTIN_LIBRARY.id || factoryIds.has(asset.id)
+    );
+    const removedCount = beforeCount - this.assets.length;
+
+    const indexById = new Map<string, number>();
+    this.assets.forEach((asset, idx) => indexById.set(asset.id, idx));
+
+    let restoredCount = 0;
+    for (const factory of factoryAssets) {
+      const next: ILibraryAsset = {
+        ...factory,
+        status: 'available'
+      };
+      const existingIdx = indexById.get(next.id);
+      if (existingIdx === undefined) {
+        indexById.set(next.id, this.assets.length);
+        this.assets.push(next);
+      } else {
+        this.assets[existingIdx] = next;
+      }
+      restoredCount += 1;
+    }
+
+    this.savePersistedConfig();
+    this.bus.emit('library:changed');
+    return { restoredCount, removedCount };
   }
 
   public resetForTesting(bus: EventBus = globalEventBus): void {
@@ -268,6 +314,7 @@ export class LibraryRegistry {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(LEGACY_STORAGE_KEY);
     }
+    this.hydrateBuiltinAssets();
   }
 
   private buildId(name: string): string {
@@ -444,6 +491,102 @@ export class LibraryRegistry {
       this.sources = [];
       this.migrateLegacyGithubSources();
     }
+    this.hydrateBuiltinAssets();
+  }
+
+  private hydrateBuiltinAssets(): number {
+    const indexById = new Map<string, number>();
+    this.assets.forEach((asset, idx) => indexById.set(asset.id, idx));
+
+    let hydratedCount = 0;
+
+    for (const skillAsset of getBundledSkillAssets(BUILTIN_LIBRARY.id)) {
+      const existingIdx = indexById.get(skillAsset.id);
+      if (existingIdx === undefined) {
+        indexById.set(skillAsset.id, this.assets.length);
+        this.assets.push(skillAsset);
+        hydratedCount += 1;
+      } else {
+        const existing = this.assets[existingIdx];
+        const isStub = Boolean(
+          existing.bundledInProduct &&
+          existing.libraryId === BUILTIN_LIBRARY.id &&
+          !existing.derivedFrom &&
+          existing.audit?.hash === skillAsset.audit.hash &&
+          existing.payload.kind === 'skill' &&
+          !existing.payload.markdownContent
+        );
+        if (isStub) {
+          this.assets[existingIdx] = {
+            ...skillAsset,
+            status: existing.status,
+            updatedAt: existing.updatedAt || skillAsset.updatedAt
+          };
+          hydratedCount += 1;
+        }
+      }
+    }
+
+    for (const entry of BUNDLED_AGENT_VERTICES) {
+      const existingIdx = indexById.get(entry.id);
+      if (existingIdx === undefined) {
+        const hydrated = bundledAgentVertexToLibraryAsset(entry, BUILTIN_LIBRARY.id);
+        indexById.set(hydrated.id, this.assets.length);
+        this.assets.push(hydrated);
+        hydratedCount += 1;
+      } else {
+        const existing = this.assets[existingIdx];
+        const isStub = Boolean(
+          existing.bundledInProduct &&
+          existing.libraryId === BUILTIN_LIBRARY.id &&
+          !existing.derivedFrom &&
+          existing.audit?.hash === entry.origin.installHash &&
+          existing.payload.kind === 'agent-template' &&
+          !existing.payload.template?.agentSettings
+        );
+        if (isStub) {
+          const hydrated = bundledAgentVertexToLibraryAsset(entry, BUILTIN_LIBRARY.id);
+          this.assets[existingIdx] = {
+            ...hydrated,
+            status: existing.status,
+            updatedAt: existing.updatedAt || hydrated.updatedAt
+          };
+          hydratedCount += 1;
+        }
+      }
+    }
+
+    for (const entry of BUNDLED_MCP_SERVERS) {
+      const existingIdx = indexById.get(entry.id);
+      if (existingIdx === undefined) {
+        const hydrated = bundledMcpToLibraryAsset(entry, BUILTIN_LIBRARY.id);
+        indexById.set(hydrated.id, this.assets.length);
+        this.assets.push(hydrated);
+        hydratedCount += 1;
+      } else {
+        const existing = this.assets[existingIdx];
+        const isStub = Boolean(
+          existing.bundledInProduct &&
+          existing.libraryId === BUILTIN_LIBRARY.id &&
+          !existing.derivedFrom &&
+          existing.audit?.hash === entry.origin.installHash &&
+          existing.payload.kind === 'mcp' &&
+          !existing.payload.command &&
+          !existing.payload.url
+        );
+        if (isStub) {
+          const hydrated = bundledMcpToLibraryAsset(entry, BUILTIN_LIBRARY.id);
+          this.assets[existingIdx] = {
+            ...hydrated,
+            status: existing.status,
+            updatedAt: existing.updatedAt || hydrated.updatedAt
+          };
+          hydratedCount += 1;
+        }
+      }
+    }
+
+    return hydratedCount;
   }
 
   private savePersistedConfig(): void {

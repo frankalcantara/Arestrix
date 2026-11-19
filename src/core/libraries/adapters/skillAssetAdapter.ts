@@ -1,4 +1,4 @@
-import type { IGitHubSkillItem, INodeSkill } from '../../types.ts';
+import type { IAssetOriginMetadata, IGitHubSkillItem, INodeSkill } from '../../types.ts';
 import type { IWorkspaceApprovedSkill } from '../../workspace/types.ts';
 import type { ILibraryAsset, ILibraryAssetAudit, ILibraryAssetProvenance, LibraryAssetStatus } from '../types.ts';
 import { assetPayloadToNodeSkill, nodeSkillToPayload } from '../types.ts';
@@ -15,6 +15,10 @@ export interface ISkillAssetInput {
   payload: ReturnType<typeof nodeSkillToPayload>;
   audit: ILibraryAssetAudit;
   provenance: ILibraryAssetProvenance;
+  domain?: string;
+  subdomain?: string;
+  bundledInProduct?: boolean;
+  origin?: IAssetOriginMetadata;
   derivedFrom?: ILibraryAsset['derivedFrom'];
 }
 
@@ -31,6 +35,10 @@ export function createSkillAsset(input: ISkillAssetInput): ILibraryAsset {
     name: input.name,
     description: input.description,
     category: input.category,
+    domain: input.domain,
+    subdomain: input.subdomain,
+    bundledInProduct: input.bundledInProduct,
+    origin: input.origin,
     version: input.version,
     license: input.license,
     status: input.status || 'available',
@@ -48,7 +56,7 @@ export function builtinSkillToAsset(
   libraryId: string,
   audit: ILibraryAssetAudit
 ): ILibraryAsset {
-  return createSkillAsset({
+  const asset = createSkillAsset({
     id: skillAssetId(libraryId, item.id),
     libraryId,
     name: item.name,
@@ -69,6 +77,10 @@ export function builtinSkillToAsset(
       importedAt: new Date().toISOString()
     }
   });
+  if (libraryId === 'library-arestrix') {
+    asset.bundledInProduct = true;
+  }
+  return asset;
 }
 
 export function workspaceSkillToAsset(

@@ -1,5 +1,11 @@
 import { IAgentTemplate, ISerializedTemplatePlugin, ITemplateParameterDef, AgentTemplateCategory, IPipelineInterface } from './AgentTemplateTypes.ts';
 import { BUILTIN_TEMPLATES } from './BuiltinTemplates.ts';
+import {
+  BUNDLED_AGENT_VERTICES,
+  getBundledAgentVertexById,
+  type IBundledAgentVertexEntry
+} from '../libraries/BuiltinLibraryCatalog.ts';
+import type { LibraryService } from '../libraries/LibraryService.ts';
 import { INodeData, INodeAgentSettings, IPort, IGraphSchema } from '../types.ts';
 import type { Graph } from '../Graph.ts';
 
@@ -83,6 +89,41 @@ export class AgentTemplateRegistry {
     BUILTIN_TEMPLATES.forEach(tpl => {
       this.templates.set(tpl.id, tpl);
     });
+    for (const entry of BUNDLED_AGENT_VERTICES) {
+      const tpl = this.bundledEntryToAgentTemplate(entry);
+      if (!this.templates.has(tpl.id)) {
+        this.templates.set(tpl.id, tpl);
+      }
+    }
+  }
+
+  private bundledEntryToAgentTemplate(entry: IBundledAgentVertexEntry): IAgentTemplate {
+    const t = entry.template;
+    const lambdaBody = t.lambdaBodyTemplate || '';
+    return {
+      id: t.id,
+      name: t.name,
+      category: (t.category as AgentTemplateCategory) || 'Agentes',
+      icon: t.icon || entry.icon || '🤖',
+      taskType: t.taskType || 'agent',
+      description: t.description || entry.description || '',
+      inputs: deepClone(t.inputs || [{ name: 'in', type: 'flow' }]),
+      outputs: deepClone(t.outputs || [{ name: 'out', type: 'flow' }]),
+      parameters: deepClone(t.parameters || {}),
+      requiredHeaders: t.requiredHeaders ? [...t.requiredHeaders] : [],
+      agentSettings: t.agentSettings ? deepClone(t.agentSettings) : defaultAgentSettings(),
+      assetKind: t.assetKind || 'agent',
+      presentation: t.presentation || 'agent',
+      presetLocked: t.presetLocked !== false,
+      isCustomPlugin: false,
+      domain: entry.domain,
+      subdomain: entry.subdomain,
+      bundledInProduct: true,
+      origin: deepClone(entry.origin),
+      author: t.author || entry.origin?.repo || 'Arestrix',
+      version: t.version || entry.origin?.installVersion || '1.0.0',
+      generateLambdaBody: () => lambdaBody
+    };
   }
 
   public getAllTemplates(): IAgentTemplate[] {
@@ -90,7 +131,167 @@ export class AgentTemplateRegistry {
   }
 
   public getTemplate(id: string): IAgentTemplate | undefined {
-    return this.templates.get(id);
+    if (!id) return undefined;
+    const direct = this.templates.get(id);
+    if (direct) return direct;
+    const bundled = getBundledAgentVertexById(id);
+    if (bundled) return this.bundledEntryToAgentTemplate(bundled);
+    return undefined;
+  }
+
+  /**
+   * Retorna um snapshot imutável de fábrica para um template embutido
+   * (`bundledAgentVertices.json` ou `BUILTIN_TEMPLATES`), isolado de mutações em runtime.
+   */
+  public getInstallDefaultTemplate(templateId: string): IAgentTemplate | null {
+    if (!templateId) return null;
+    const bundled = getBundledAgentVertexById(templateId);
+    if (bundled) {
+      return this.bundledEntryToAgentTemplate(bundled);
+    }
+    const builtin = BUILTIN_TEMPLATES.find(t => t.id === templateId);
+    if (!builtin) return null;
+    return {
+      ...builtin,
+      inputs: deepClone(builtin.inputs),
+      outputs: deepClone(builtin.outputs),
+      parameters: deepClone(builtin.parameters),
+      requiredHeaders: builtin.requiredHeaders ? [...builtin.requiredHeaders] : undefined,
+      agentSettings: builtin.agentSettings ? deepClone(builtin.agentSettings) : undefined,
+      childGraph: builtin.childGraph ? deepClone(builtin.childGraph) : undefined,
+      pipelineInterface: builtin.pipelineInterface ? deepClone(builtin.pipelineInterface) : undefined,
+      origin: builtin.origin ? deepClone(builtin.origin) : undefined
+    };
+  }
+
+  private buildDefaultPortsAndParams(
+    nodeId: string,
+    tpl: Pick<IAgentTemplate, 'inputs' | 'outputs' | 'parameters'> | Pick<ISerializedTemplatePlugin, 'inputs' | 'outputs' | 'parameters'>
+  ): { inputs: IPort[]; outputs: IPort[]; parameters: Record<string, string | number | boolean> } {
+    const inputs: IPort[] = (tpl.inputs || [{ name: 'in', type: 'flow' }]).map((inp, idx) => ({
+      id: `${nodeId}_in_${idx}`,
+      name: inp.name,
+      direction: 'input',
+      type: inp.type,
+      dataType: inp.dataType
+    }));
+    const outputs: IPort[] = (tpl.outputs || [{ name: 'out', type: 'flow' }]).map((out, idx) => ({
+      id: `${nodeId}_out_${idx}`,
+      name: out.name,
+      direction: 'output',
+      type: out.type,
+      conditionBranchIndex: out.conditionBranchIndex !== undefined ? out.conditionBranchIndex : idx
+    }));
+    const parameters: Record<string, string | number | boolean> = {};
+    Object.entries(tpl.parameters || {}).forEach(([key, paramDef]) => {
+      parameters[key] = paramDef.defaultValue;
+    });
+    return { inputs, outputs, parameters };
+  }
+
+  /**
+   * Constrói um patch de restauração aos padrões originais de instalação para
+   * um vértice modificado ou derivado, preservando a identidade de origem (`origin`).
+   */
+  public buildInstallDefaultNodePatch(
+    node: INodeData,
+    libraryService?: LibraryService
+  ): Partial<INodeData> | null {
+    const candidateIds: string[] = [];
+    const addCandidate = (value?: string) => {
+      if (value && !candidateIds.includes(value)) candidateIds.push(value);
+    };
+
+    if (libraryService && node.librarySource?.assetId) {
+      const currentAsset = libraryService.getAsset(node.librarySource.assetId);
+      addCandidate(currentAsset?.derivedFrom?.assetId);
+      addCandidate(currentAsset?.origin?.assetId);
+    }
+
+    addCandidate(node.origin?.assetId);
+    addCandidate(node.origin?.templateId);
+    addCandidate(node.librarySource?.assetId);
+    addCandidate(node.templateId);
+    addCandidate(node.presetId);
+    addCandidate(node.origin?.canonicalKey);
+
+    for (const candidate of candidateIds) {
+      if (libraryService) {
+        const defaultAsset = libraryService.getInstallDefaultAsset(candidate);
+        if (defaultAsset?.payload.kind === 'agent-template' && defaultAsset.origin) {
+          const tpl = defaultAsset.payload.template;
+          const originCopy = deepClone(defaultAsset.origin);
+          const { inputs, outputs, parameters } = this.buildDefaultPortsAndParams(node.id, tpl);
+          return {
+            label: tpl.name,
+            agentSettings: tpl.agentSettings ? deepClone(tpl.agentSettings) : defaultAgentSettings(),
+            inputs,
+            outputs,
+            parameters,
+            presetLocked: true,
+            presetId: tpl.id,
+            templateId: tpl.id,
+            librarySource: {
+              libraryId: originCopy.libraryId || defaultAsset.libraryId,
+              assetId: defaultAsset.id,
+              hash: originCopy.installHash || defaultAsset.audit.hash,
+              version: originCopy.installVersion || defaultAsset.version,
+              bundledInProduct: true,
+              originRepo: originCopy.repo,
+              originUrl: originCopy.url,
+              originLicense: originCopy.license
+            },
+            origin: originCopy
+          };
+        }
+      }
+
+      const bundledEntry = getBundledAgentVertexById(candidate);
+      if (bundledEntry) {
+        const tpl = bundledEntry.template;
+        const originCopy = deepClone(bundledEntry.origin);
+        const { inputs, outputs, parameters } = this.buildDefaultPortsAndParams(node.id, tpl);
+        return {
+          label: tpl.name,
+          agentSettings: tpl.agentSettings ? deepClone(tpl.agentSettings) : defaultAgentSettings(),
+          inputs,
+          outputs,
+          parameters,
+          presetLocked: true,
+          presetId: tpl.id,
+          templateId: tpl.id,
+          librarySource: {
+            libraryId: originCopy.libraryId || 'library-arestrix',
+            assetId: bundledEntry.id,
+            hash: originCopy.installHash,
+            version: originCopy.installVersion || tpl.version || '1.0.0',
+            bundledInProduct: true,
+            originRepo: originCopy.repo,
+            originUrl: originCopy.url,
+            originLicense: originCopy.license
+          },
+          origin: originCopy
+        };
+      }
+    }
+
+    const fallbackId = node.templateId || node.presetId;
+    const builtinTpl = fallbackId ? this.getInstallDefaultTemplate(fallbackId) : null;
+    if (!builtinTpl) return null;
+
+    const { inputs, outputs, parameters } = this.buildDefaultPortsAndParams(node.id, builtinTpl);
+    return {
+      label: builtinTpl.name,
+      agentSettings: builtinTpl.agentSettings ? deepClone(builtinTpl.agentSettings) : undefined,
+      inputs,
+      outputs,
+      parameters,
+      presetLocked: builtinTpl.presetLocked !== false,
+      presetId: builtinTpl.id,
+      templateId: builtinTpl.id,
+      librarySource: node.librarySource ? { ...node.librarySource } : undefined,
+      origin: builtinTpl.origin ? deepClone(builtinTpl.origin) : undefined
+    };
   }
 
   public getTemplatesByCategory(): Map<string, IAgentTemplate[]> {
@@ -135,7 +336,7 @@ export class AgentTemplateRegistry {
     y: number = 0,
     customParams?: Record<string, any>
   ): INodeData {
-    const tpl = this.templates.get(templateId);
+    const tpl = this.getTemplate(templateId);
     if (!tpl) {
       throw new Error(`Template com id "${templateId}" não encontrado no catálogo.`);
     }
@@ -205,6 +406,22 @@ export class AgentTemplateRegistry {
     if (tpl.childGraph) nodeData.childGraph = deepClone(tpl.childGraph);
     if (tpl.pipelineInterface) nodeData.pipelineInterface = deepClone(tpl.pipelineInterface);
     if (tpl.presentation === 'agent') nodeData.presentation = 'agent';
+    if (tpl.origin) {
+      nodeData.origin = deepClone(tpl.origin);
+      if (tpl.bundledInProduct || tpl.origin.bundledInProduct) {
+        const bundledEntry = getBundledAgentVertexById(tpl.origin.assetId || tpl.id);
+        nodeData.librarySource = {
+          libraryId: tpl.origin.libraryId || 'library-arestrix',
+          assetId: bundledEntry?.id || tpl.origin.assetId,
+          hash: tpl.origin.installHash,
+          version: tpl.origin.installVersion || tpl.version || '1.0.0',
+          bundledInProduct: true,
+          originRepo: tpl.origin.repo,
+          originUrl: tpl.origin.url,
+          originLicense: tpl.origin.license
+        };
+      }
+    }
 
     if (tpl.createChildGraph) {
       nodeData.childGraph = tpl.createChildGraph(label, parameters);
@@ -290,6 +507,8 @@ export class AgentTemplateRegistry {
       assetKind: isAgent ? 'agent' : 'vertex',
       presetLocked: isAgent ? true : undefined,
       isCustomPlugin: true,
+      bundledInProduct: node.origin?.bundledInProduct ?? node.librarySource?.bundledInProduct,
+      origin: node.origin ? deepClone(node.origin) : undefined,
       author: 'Usuário Arestrix',
       version: '1.0.0',
       generateLambdaBody: (_params, label) => bodyTemplate.split('${label}').join(label)
@@ -421,7 +640,11 @@ export class AgentTemplateRegistry {
             presentation: item.presentation,
             presetLocked: item.taskType === 'agent' || item.assetKind === 'pipeline'
               ? (item.presetLocked !== false) : undefined,
-            isCustomPlugin: true,
+            isCustomPlugin: !item.bundledInProduct,
+            domain: item.domain,
+            subdomain: item.subdomain,
+            bundledInProduct: item.bundledInProduct,
+            origin: item.origin ? deepClone(item.origin) : undefined,
             author: item.author || 'Usuário Arestrix',
             version: item.version || '1.0.0',
             generateLambdaBody: (params, label) => {
@@ -476,6 +699,10 @@ export class AgentTemplateRegistry {
       pipelineInterface: tpl.pipelineInterface ? deepClone(tpl.pipelineInterface) : undefined,
       presentation: tpl.presentation,
       presetLocked: tpl.presetLocked,
+      domain: tpl.domain,
+      subdomain: tpl.subdomain,
+      bundledInProduct: tpl.bundledInProduct,
+      origin: tpl.origin ? deepClone(tpl.origin) : undefined,
       author: tpl.author,
       version: tpl.version
     };

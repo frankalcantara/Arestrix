@@ -17,6 +17,7 @@ import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
 import { LibraryRegistry } from '../../core/libraries/LibraryRegistry.ts';
+import { LibraryService } from '../../core/libraries/LibraryService.ts';
 import { bindLibraryBrowser, renderLibraryBrowser } from '../libraries/LibraryTree.ts';
 import { t, getLocale } from '../../i18n/index.ts';
 import { PropertiesController } from '../properties/PropertiesController.ts';
@@ -134,6 +135,13 @@ export class BackstageView {
           void this.openProperties(scope, payload.section);
         }
       });
+      // Qualquer ponto da interface que ofereça a biblioteca de ativos deve
+      // abrir esta página, e não uma janela modal.
+      globalEventBus.on('backstage:open', (payload: { section?: string }) => {
+        if (payload?.section === 'library') {
+          void this.open('library');
+        }
+      });
     }
   }
 
@@ -204,6 +212,14 @@ export class BackstageView {
       await this.initSaveAsState();
     } else if (this.activeSection === 'open' && this.openPlace === 'computer') {
       await this.loadComputerListing();
+    } else if (this.activeSection === 'library') {
+      // O MCP nativo/stdio pode ter gravado .workspace/libraries.json durante a
+      // sessao (derive/install/restore/audit). Recarrega antes de desenhar a pagina.
+      try {
+        await LibraryService.getInstance().reloadFromWorkspace();
+      } catch {
+        // Sem snapshot no disco: mantem o catalogo em memoria.
+      }
     }
   }
 
@@ -296,9 +312,6 @@ export class BackstageView {
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'export' ? 'active' : ''}" data-section="export">
               <span>📤</span> ${t('backstage.sidebar.export')}
-            </li>
-            <li class="backstage-nav-item" id="btn-backstage-github-repos">
-              <span>🌐</span> ${t('github_repos.title')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'properties' ? 'active' : ''}" data-section="properties">
               <span class="backstage-nav-svg">${ribbonIcon('settings', 18)}</span> ${t('properties_window.hub.nav', 'Propriedades')}
@@ -1170,8 +1183,9 @@ export class BackstageView {
   }
 
   private renderLibrarySection(): string {
-    const scope: 'workspace' | 'studio' | 'project' = 'workspace';
-    const libraryHtml = renderLibraryBrowser({ registry: LibraryRegistry.getInstance(), scope });
+    // A página do Backstage é o único ponto de gestão de bibliotecas, então
+    // lista Studio, Workspace e a biblioteca nativa no mesmo navegador.
+    const libraryHtml = renderLibraryBrowser({ registry: LibraryRegistry.getInstance() });
     return `
       <h2 class="backstage-header-title">${t('backstage.library.title', 'Asset Library')}</h2>
       <p class="backstage-header-sub">${t('backstage.library.subtitle', 'Manage vertex and agent assets in the Arestrix Library.')}</p>
@@ -1489,11 +1503,6 @@ export class BackstageView {
       }
     });
 
-    // Bibliotecas e fontes (o evento legado abre as Propriedades)
-    this.overlay.querySelector('#btn-backstage-github-repos')?.addEventListener('click', () => {
-      globalEventBus.emit('properties:open', { scope: 'studio', section: 'libraries' });
-    });
-
     // Configurar Git do Projeto
     this.overlay.querySelector('#btn-backstage-open-git')?.addEventListener('click', () => {
       globalEventBus.emit('modal:open-git-account');
@@ -1595,7 +1604,7 @@ export class BackstageView {
       if (container) {
         bindLibraryBrowser(container as HTMLElement, {
           registry: LibraryRegistry.getInstance(),
-          scope: 'workspace'
+          graph: this.graph
         });
       }
     }

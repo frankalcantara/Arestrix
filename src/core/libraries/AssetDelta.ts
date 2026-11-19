@@ -1,4 +1,4 @@
-import type { IGraphSchema, INodeAgentSettings } from '../types.ts';
+import type { IGraphSchema, INodeAgentSettings, ReasoningEffortLevel } from '../types.ts';
 
 export interface IGraphDelta {
   nodesAdded: number;
@@ -20,13 +20,40 @@ const AGENT_SETTING_LABELS: Array<[keyof INodeAgentSettings, string]> = [
   ['isSerialAcrossBatch', 'Execução serial']
 ];
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      const entry = (value as Record<string, unknown>)[key];
+      if (entry !== undefined) out[key] = canonicalize(entry);
+    }
+    return out;
+  }
+  return value;
+}
+
 function stable(value: unknown): string {
   if (value === undefined) return 'null';
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(canonicalize(value));
   } catch {
     return String(value);
   }
+}
+
+function modelWithoutReasoningEffort(
+  model: INodeAgentSettings['model'] | undefined
+): Record<string, unknown> | undefined {
+  if (!model) return undefined;
+  const { reasoningEffort: _effort, ...rest } = model;
+  return rest;
+}
+
+function modelReasoningEffort(
+  model: INodeAgentSettings['model'] | undefined
+): ReasoningEffortLevel {
+  return model?.reasoningEffort ?? 'medium';
 }
 
 function nodeComparable(node: IGraphSchema['nodes'][number]): string {
@@ -76,6 +103,17 @@ export function diffAgentSettings(
 ): string[] {
   const changed: string[] = [];
   for (const [key, label] of AGENT_SETTING_LABELS) {
+    if (key === 'model') {
+      const currentModel = current?.model;
+      const nextModel = next?.model;
+      if (stable(modelWithoutReasoningEffort(currentModel)) !== stable(modelWithoutReasoningEffort(nextModel))) {
+        changed.push(label);
+      }
+      if (modelReasoningEffort(currentModel) !== modelReasoningEffort(nextModel)) {
+        changed.push('Esforço de raciocínio');
+      }
+      continue;
+    }
     if (stable(current?.[key]) !== stable(next?.[key])) changed.push(label);
   }
   return changed;

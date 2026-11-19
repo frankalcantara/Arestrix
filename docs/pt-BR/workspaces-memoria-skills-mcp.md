@@ -294,6 +294,7 @@ sem processo filho e sem código de terceiros. Elas aparecem no vértice MCP e n
 | `arestrix.tempo` | `now`, `add_duration`, `diff` | ISO 8601, anos bissextos, fusos. |
 | `arestrix.git` | `git_status`, `git_log`, `git_diff`, `git_show_file` | **Somente leitura.** Exige o Git instalado. |
 | `arestrix.sqlite` | `list_tables`, `describe_table`, `sql_query`, `sql_execute` | Banco SQLite embutido, em um arquivo do projeto (padrão `data/arestrix.db`). Veja abaixo. |
+| `arestrix.biblioteca` | `library_list_assets`, `library_get_asset`, `library_search_assets`, `library_install_asset`, `library_derive_asset`, `library_restore_asset`, `library_audit_asset` | Catálogo nativo + `.workspace/libraries.json`, com índice em memória e auditoria C++. |
 
 **Regras de segurança, as mesmas para todos**
 - Tudo fica dentro da pasta do projeto. A pasta `.git` não pode ser lida. **Pipelines, configuração do projeto, `.workspace`, `.arestrix` e
@@ -327,6 +328,11 @@ uma caixa, e "Escolher ferramentas" liga e desliga cada ferramenta. Só os nomes
 
 **Velocidade.** Na máquina de desenvolvimento, uma chamada nativa levou cerca de 4 microssegundos; um servidor MCP externo, com sessão
 persistente, cerca de 56 microssegundos para uma ferramenta trivial, e abrir um processo por chamada levou cerca de 190 milissegundos.
+
+**Biblioteca fora do processo.** O executável `arestrix-mcp-biblioteca` expõe as mesmas sete ferramentas da biblioteca por stdio para
+clientes MCP externos e para o servidor homologado `arestrix-biblioteca`. Ele recebe `--root <pasta do projeto>` (ou usa
+`ARESTRIX_PROJECT_ROOT`) e mantém o catálogo indexado durante toda a sessão; o primeiro `tools/call` carrega os 6 MB do catálogo nativo
+e os seguintes apenas consultam os índices em memória.
 
 ## Servidores MCP
 

@@ -127,11 +127,17 @@ export class SettingsResolver {
       layersFor(context, 'memory')
     );
     memory.value = { ...memory.value, ...memoryModePatch(memoryModeOf(memory.value)) };
+    const model = resolveCategory<IModelConfig>(
+      {
+        ...DEFAULT_PIPELINE_DEFAULTS.model,
+        reasoningEffort: DEFAULT_PIPELINE_DEFAULTS.model.reasoningEffort ?? 'medium'
+      },
+      layersFor(context, 'model')
+    );
+    model.value.reasoningEffort =
+      model.value.reasoningEffort ?? DEFAULT_PIPELINE_DEFAULTS.model.reasoningEffort ?? 'medium';
     return {
-      model: resolveCategory<IModelConfig>(
-        DEFAULT_PIPELINE_DEFAULTS.model,
-        layersFor(context, 'model')
-      ),
+      model,
       sandbox: resolveCategory<ISandboxPolicy>(
         DEFAULT_PIPELINE_DEFAULTS.sandbox,
         layersFor(context, 'sandbox')

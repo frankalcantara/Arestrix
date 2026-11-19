@@ -491,11 +491,11 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       }
     });
 
-    it('deve encaminhar Bibliotecas para as Propriedades a partir da Backstage View', async () => {
+    it('abre a página da Biblioteca de Ativos a partir da tela Informações', async () => {
       const { globalEventBus } = await import('../src/core/EventBus.ts');
-      let payload: any = null;
+      let propertiesPayload: any = null;
       globalEventBus.on('properties:open', (value: any) => {
-        payload = value;
+        propertiesPayload = value;
       });
 
       await ribbon.openBackstage('info');
@@ -503,23 +503,18 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(backstage.isOpen()).toBe(true);
 
       const overlay = backstage.getOverlay();
-      const btnGithub = overlay?.querySelector('#btn-backstage-github-repos') as any;
-      expect(btnGithub).toBeDefined();
+      (overlay?.querySelector('#btn-backstage-info-toggle') as any)?.click();
+      const btnLibrary = overlay?.querySelector('#btn-backstage-library-from-info') as any;
+      expect(btnLibrary).toBeDefined();
 
-      let shown: { scope: string; section?: string } | null = null;
-      (backstage as any).propertiesController = {
-        show: async (scope: string, section?: string) => {
-          shown = { scope, section };
-        }
-      };
-
-      btnGithub?.click();
+      btnLibrary?.click();
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(payload).toEqual({ scope: 'studio', section: 'libraries' });
-      expect(shown).toEqual({ scope: 'studio', section: 'libraries' });
-      // O modal abre sobre o Backstage; fechar/cancelar deve devolver o usuário
-      // à tela Arquivo, não à tela principal do Studio.
+      // A biblioteca é uma página do Backstage, nunca uma janela de Propriedades.
+      expect((backstage as any).activeSection).toBe('library');
+      expect(propertiesPayload).toBeNull();
+      expect(overlay?.innerHTML).toContain('backstage-library-container');
+      expect(overlay?.innerHTML).toContain('properties-library-browser');
       expect(backstage.isOpen()).toBe(true);
     });
 

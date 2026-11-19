@@ -994,9 +994,24 @@ html[data-theme="dark"] {
   color: var(--modal-ink) !important;
 }
 
-:is(.modal-dialog, .modal-window) :is(.skill-toolbar, .code-editor-header, .template-action-bar, .template-category-tabs) {
+:is(.modal-dialog, .modal-window) :is(.skill-toolbar, .code-editor-header, .template-action-bar, .template-category-tabs, .template-filter-bar) {
   background: var(--modal-surface-2) !important;
   border-color: var(--modal-line) !important;
+}
+
+:is(.modal-dialog, .modal-window) .template-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(140px, 1fr) minmax(140px, 1fr);
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--modal-line);
+}
+
+:is(.modal-dialog, .modal-window) .template-filter-bar .form-input,
+:is(.modal-dialog, .modal-window) .template-filter-bar .form-select {
+  min-width: 0;
+  height: 32px;
+  font-size: 12px;
 }
 
 :is(.modal-dialog, .modal-window) .category-pill {

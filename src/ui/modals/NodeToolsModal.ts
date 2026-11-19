@@ -223,9 +223,10 @@ export class NodeToolsModal extends BaseModal {
     }
 
     this.dialog.querySelector('#btn-node-tools-add-library')?.addEventListener('click', () => {
+      this.hide();
       const backstage = BackstageView.getInstance();
       if (backstage) {
-        backstage.open('library');
+        void backstage.open('library');
       }
     });
 

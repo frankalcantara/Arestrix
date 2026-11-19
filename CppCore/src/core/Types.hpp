@@ -73,6 +73,12 @@ struct NodeData {
     std::string customLambdaBody;
     std::string criticalSectionId;
     std::string templateId;
+    std::string presetId;
+    bool presetLocked = false;
+    bool hidden = false;
+    std::string presentation;
+    json librarySource = nullptr;
+    json origin = nullptr;
     std::vector<std::string> requiredHeaders;
     json agentSettings;
     json mcpSettings;      // vertice mcp: servidor, ferramenta, argumentos, origem da entrada e arquivo de saida
@@ -238,6 +244,12 @@ inline void to_json(json& j, const NodeData& n) {
         {"pipelineInterface", n.pipelineInterface},
         {"validationRules", n.validationRules}
     };
+    if (!n.presetId.empty()) j["presetId"] = n.presetId;
+    if (n.presetLocked) j["presetLocked"] = true;
+    if (n.hidden) j["hidden"] = true;
+    if (!n.presentation.empty()) j["presentation"] = n.presentation;
+    if (!n.librarySource.is_null()) j["librarySource"] = n.librarySource;
+    if (!n.origin.is_null()) j["origin"] = n.origin;
 }
 inline void from_json(const json& j, NodeData& n) {
     j.at("id").get_to(n.id);
@@ -252,6 +264,12 @@ inline void from_json(const json& j, NodeData& n) {
     if(j.contains("customLambdaBody")) j.at("customLambdaBody").get_to(n.customLambdaBody);
     if(j.contains("criticalSectionId")) j.at("criticalSectionId").get_to(n.criticalSectionId);
     if(j.contains("templateId")) j.at("templateId").get_to(n.templateId);
+    n.presetId = j.value("presetId", std::string());
+    n.presetLocked = j.value("presetLocked", false);
+    n.hidden = j.value("hidden", false);
+    n.presentation = j.value("presentation", std::string());
+    if (j.contains("librarySource")) j.at("librarySource").get_to(n.librarySource);
+    if (j.contains("origin")) j.at("origin").get_to(n.origin);
     if(j.contains("requiredHeaders")) j.at("requiredHeaders").get_to(n.requiredHeaders);
     if(j.contains("agentSettings")) j.at("agentSettings").get_to(n.agentSettings);
     if(j.contains("switchSettings")) j.at("switchSettings").get_to(n.switchSettings);

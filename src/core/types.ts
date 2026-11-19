@@ -202,9 +202,12 @@ export interface ISandboxPolicy {
   readWriteMounts: string[];
 }
 
+export type ReasoningEffortLevel = 'none' | 'low' | 'medium' | 'high' | 'max';
+
 export interface IModelConfig {
   provider: LLMProvider;
   model: string;
+  reasoningEffort?: ReasoningEffortLevel;
   skillPath?: string;
   promptTemplate?: string;
   temperature?: number;
@@ -769,6 +772,21 @@ export interface IArtifactItem {
   description?: string;
 }
 
+export interface IAssetOriginMetadata {
+  bundledInProduct: boolean;
+  sourceKind: 'builtin' | 'github' | 'local-folder' | 'workspace';
+  libraryId: string;
+  assetId: string;
+  templateId: string;
+  repo?: string;
+  path?: string;
+  url?: string;
+  license: string;
+  canonicalKey?: string;
+  installVersion: string;
+  installHash: string;
+}
+
 export interface INodeData {
   id: string;
   label: string;
@@ -797,7 +815,12 @@ export interface INodeData {
     assetId: string;
     hash: string;
     version: string;
+    bundledInProduct?: boolean;
+    originRepo?: string;
+    originUrl?: string;
+    originLicense?: string;
   };
+  origin?: IAssetOriginMetadata;
   /** Interface declarada do pipeline empacotado (entrada e saídas nomeadas). */
   pipelineInterface?: {
     input: { name: string; description?: string };
@@ -1052,6 +1075,7 @@ export const DEFAULT_PIPELINE_DEFAULTS: IGlobalPipelineDefaults = {
   model: {
     provider: 'deepseek',
     model: 'deepseek-flash',
+    reasoningEffort: 'medium',
     skillPath: '',
     promptTemplate: ''
   },

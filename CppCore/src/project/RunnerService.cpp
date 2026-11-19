@@ -370,6 +370,19 @@ RunnerExportResult RunnerService::exportRunner(
         }
     }
 
+    // 4b. Copia servidores MCP do workspace caso existam (somente .json sanitizados)
+    fs::path srcMcps = projectRoot / ".workspace" / "mcps";
+    if (fs::exists(srcMcps, ec) && fs::is_directory(srcMcps, ec)) {
+        fs::path destMcps = targetDir / ".workspace" / "mcps";
+        fs::create_directories(destMcps, ec);
+        for (const auto& entry : fs::directory_iterator(srcMcps, ec)) {
+            if (fs::is_regular_file(entry, ec) && entry.path().extension() == ".json") {
+                fs::copy_file(entry.path(), destMcps / entry.path().filename(),
+                              fs::copy_options::overwrite_existing, ec);
+            }
+        }
+    }
+
     // 5. Copia ou gera o executável nativo
     fs::path builtExe = projectRoot / ".arestrix" / "build";
 #ifdef _WIN32

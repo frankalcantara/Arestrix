@@ -293,6 +293,7 @@ function call.
 | `arestrix.tempo` | `now`, `add_duration`, `diff` | ISO 8601, leap years, time zones. |
 | `arestrix.git` | `git_status`, `git_log`, `git_diff`, `git_show_file` | **Read-only.** Needs Git installed. |
 | `arestrix.sqlite` | `list_tables`, `describe_table`, `sql_query`, `sql_execute` | An embedded SQLite database in a project file (default `data/arestrix.db`). See below. |
+| `arestrix.biblioteca` | `library_list_assets`, `library_get_asset`, `library_search_assets`, `library_install_asset`, `library_derive_asset`, `library_restore_asset`, `library_audit_asset` | Native catalog + `.workspace/libraries.json`, with an in-memory index and C++ auditing. |
 
 **Safety rules, the same for all of them**
 - Everything stays inside the project folder. `.git` cannot be read. **Pipelines, project configuration, `.workspace`, `.arestrix` and `.githooks`
@@ -325,6 +326,10 @@ box, and "Choose tools" lets you switch its tools on and off one by one. Nothing
 
 **Speed.** On the development machine a native call took about 4 microseconds; an external MCP server, with a persistent session,
 about 56 microseconds for a trivial tool, and opening a process per call took roughly 190 milliseconds.
+
+**Library outside the process.** The `arestrix-mcp-biblioteca` executable exposes the same seven library tools over stdio to external MCP
+clients and to the approved `arestrix-biblioteca` server. It takes `--root <project folder>` (or `ARESTRIX_PROJECT_ROOT`) and keeps the
+catalog indexed for the whole session; the first `tools/call` loads the 6 MB native catalog and later calls only read the in-memory indexes.
 
 ## MCP servers
 

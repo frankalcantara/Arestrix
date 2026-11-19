@@ -52,6 +52,8 @@
 #include "project/OpenableFiles.hpp"
 #include "project/ProjectArchive.hpp"
 #include "libraries/GitHubSource.hpp"
+#include "libraries/LibraryCatalog.hpp"
+#include "libraries/LibraryMcpServer.hpp"
 #include "project/GitSyncService.hpp"
 #include "project/MemoryDatabaseGuard.hpp"
 #include "sqlite3.h"
@@ -11931,6 +11933,434 @@ TEST(assistant_reads_skills_mcp_and_updates_project_metadata) {
     fs::remove_all(root);
 }
 
+static void writeLibraryMcpFixture(const fs::path& root) {
+    fs::create_directories(root / ".workspace");
+    std::ofstream out(root / ".workspace" / "libraries.json", std::ios::binary);
+    out << R"json({
+  "version": 2,
+  "libraries": [
+    {"id": "library-arestrix", "name": "Biblioteca Arestrix", "description": "", "kind": "builtin",
+     "scope": "studio", "createdAt": "2026-01-01T00:00:00Z", "isBuiltin": true},
+    {"id": "lib-test", "name": "Biblioteca de Teste", "description": "", "kind": "local",
+     "scope": "workspace", "createdAt": "2026-01-01T00:00:00Z", "isBuiltin": false}
+  ],
+  "assets": [
+    {
+      "id": "asset-test-agent",
+      "libraryId": "lib-test",
+      "kind": "agent-template",
+      "name": "test-agent",
+      "description": "Agente revisor de testes",
+      "category": "Agentes",
+      "domain": "Engenharia de Software",
+      "subdomain": "Code Review, Debug & Git",
+      "version": "1.0.0",
+      "license": "MIT",
+      "status": "installed",
+      "origin": {"repo": "example/repo", "url": "https://example.test", "license": "MIT",
+                 "installVersion": "1.0.0", "installHash": "hash-test"},
+      "provenance": {"sourceKind": "workspace", "sourceId": "lib-test", "importedAt": "2026-01-01T00:00:00Z"},
+      "audit": {"verdict": "APPROVE", "riskScore": 0, "policyVersion": "test", "hash": "hash-test",
+                "findings": [], "warnings": []},
+      "payload": {"kind": "agent-template", "template": {
+        "id": "tpl-test", "name": "test-agent", "taskType": "agent", "description": "",
+        "inputs": [{"name": "in", "type": "flow"}],
+        "outputs": [{"name": "out", "type": "flow"}],
+        "parameters": {"tone": {"label": "Tom", "type": "string", "defaultValue": "formal", "description": ""}},
+        "lambdaBodyTemplate": "",
+        "agentSettings": {"inheritSandbox": true, "inheritModel": false,
+                          "model": {"provider": "local", "model": "demo"},
+                          "skills": [], "activeSkillId": ""}
+      }},
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "asset-test-skill",
+      "libraryId": "lib-test",
+      "kind": "skill",
+      "name": "revisor-testes",
+      "description": "Revisa testes automatizados",
+      "category": "Skills",
+      "version": "1.0.0",
+      "license": "MIT",
+      "status": "available",
+      "provenance": {"sourceKind": "workspace", "sourceId": "lib-test", "importedAt": "2026-01-01T00:00:00Z"},
+      "audit": {"verdict": "APPROVE", "riskScore": 0, "policyVersion": "test", "hash": "hash-skill",
+                "findings": [], "warnings": []},
+      "payload": {"kind": "skill", "markdownContent": "---\nname: revisor-testes\n---\n# Revisor de testes",
+                  "systemPrompt": "Revise os testes.", "tools": ["read"]},
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "asset-test-mcp",
+      "libraryId": "lib-test",
+      "kind": "mcp",
+      "name": "eco-test",
+      "description": "Servidor MCP de teste",
+      "category": "MCPs",
+      "version": "1.0.0",
+      "license": "MIT",
+      "status": "available",
+      "provenance": {"sourceKind": "workspace", "sourceId": "lib-test", "importedAt": "2026-01-01T00:00:00Z"},
+      "audit": {"verdict": "APPROVE", "riskScore": 0, "policyVersion": "test", "hash": "hash-mcp",
+                "findings": [], "warnings": []},
+      "payload": {"kind": "mcp", "transport": "stdio", "command": "node", "args": ["server.js"],
+                  "env": {"TOKEN": "${TOKEN}"},
+                  "cachedTools": [{"name": "echo", "description": "Echo"}]},
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "updatedAt": "2026-01-01T00:00:00Z"
+})json";
+}
+
+TEST(library_catalog_write_operations) {
+    namespace lib = taskforge::libraries;
+    fs::path root = makeTempDir("library-catalog");
+    writeLibraryMcpFixture(root);
+
+    lib::LibraryCatalog catalog;
+    std::string warning;
+    CHECK(lib::LibraryCatalog::load(root, catalog, warning));
+    CHECK(catalog.find("asset-test-agent") != nullptr);
+    CHECK(catalog.find("asset-test-mcp") != nullptr);
+
+    std::string error;
+    auto installed = catalog.installAsset("asset-test-skill", true, error);
+    CHECK(installed.value("ok", false));
+    CHECK(fs::is_regular_file(root / ".workspace" / "skills" / "asset-test-skill" / "SKILL.md"));
+    CHECK(fs::is_regular_file(root / ".workspace" / "skills" / "asset-test-skill" / "skill.json"));
+    CHECK(catalog.find("asset-test-skill")->value("status", std::string()) == "installed");
+
+    auto mcpInstalled = catalog.installAsset("asset-test-mcp", true, error);
+    CHECK(mcpInstalled.value("ok", false));
+    CHECK(fs::is_regular_file(root / ".workspace" / "mcps" / "asset-test-mcp.json"));
+    CHECK(lib::LibraryCatalog::load(root, catalog, warning));
+    CHECK(catalog.find("asset-test-skill")->value("status", std::string()) == "installed");
+
+    auto derived = catalog.deriveAsset("asset-test-agent", "Meu Revisor", "", error);
+    CHECK(derived.value("ok", false));
+    const std::string derivedId = derived.value("asset_id", std::string());
+    CHECK(!derivedId.empty());
+    const json* derivedAsset = catalog.find(derivedId);
+    CHECK(derivedAsset != nullptr);
+    CHECK(derivedAsset->at("derivedFrom").value("assetId", std::string()) == "asset-test-agent");
+    const std::string ownLibrary = derivedAsset->value("libraryId", std::string());
+    CHECK(catalog.findLibrary(ownLibrary) != nullptr);
+    CHECK(catalog.findLibrary(ownLibrary)->value("name", std::string()) == "Minha biblioteca");
+
+    auto audited = catalog.auditAsset("asset-test-agent", error);
+    CHECK(audited.value("ok", false));
+    CHECK(audited.at("audit").value("verdict", std::string()) == "APPROVE");
+    CHECK(!audited.at("audit").value("hash", std::string()).empty());
+
+    const std::string bundledId = "asset-library-arestrix-agent-resolve-pr-feedback";
+    auto bundledAudit = catalog.auditAsset(bundledId, error);
+    CHECK(bundledAudit.value("ok", false));
+    const std::string bundledHash = bundledAudit.at("audit").value("hash", std::string());
+    CHECK(!bundledHash.empty());
+
+    auto restored = catalog.restoreAsset(bundledId, error);
+    CHECK(restored.value("ok", false));
+
+    lib::LibraryCatalog reloaded;
+    CHECK(lib::LibraryCatalog::load(root, reloaded, warning));
+    CHECK(reloaded.find(derivedId) != nullptr);
+    CHECK(reloaded.find("asset-test-skill")->value("status", std::string()) == "installed");
+    CHECK(reloaded.find("asset-test-mcp")->value("status", std::string()) == "installed");
+    // A restauracao volta ao hash de fabrica, nao ao hash da reauditoria.
+    CHECK(reloaded.find(bundledId) != nullptr);
+    CHECK(reloaded.find(bundledId)->at("audit").value("hash", std::string()) != bundledHash);
+
+    fs::remove_all(root);
+}
+
+TEST(library_mcp_server_protocol) {
+    fs::path root = makeTempDir("library-mcp-server");
+    writeLibraryMcpFixture(root);
+
+    std::ostringstream script;
+    script << R"json({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}})json" << '\n';
+    script << R"json({"jsonrpc":"2.0","method":"notifications/initialized"})json" << '\n';
+    script << R"json({"jsonrpc":"2.0","id":2,"method":"tools/list"})json" << '\n';
+    script << R"json({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"library_search_assets","arguments":{"query":"revisor"}}})json" << '\n';
+    script << R"json({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"library_get_asset","arguments":{"id":"asset-test-agent"}}})json" << '\n';
+    script << R"json({"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"library_audit_asset","arguments":{"asset_id":"asset-test-agent"}}})json" << '\n';
+    script << R"json({"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"library_get_asset","arguments":{"id":"nao-existe"}}})json" << '\n';
+    std::istringstream input(script.str());
+
+    std::ostringstream output;
+    CHECK(taskforge::libraries::runLibraryMcpServer(input, output, root) == 0);
+
+    std::istringstream lines(output.str());
+    std::vector<json> responses;
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (!line.empty()) responses.push_back(taskforge::jsonutil::parse(line));
+    }
+    CHECK(responses.size() == 6);
+    CHECK(responses[0].at("result").value("protocolVersion", std::string()) == "2024-11-05");
+    CHECK(responses[0].at("result").at("serverInfo").value("name", std::string()) == "arestrix-mcp-biblioteca");
+    CHECK(responses[1].at("result").at("tools").size() == 7);
+    CHECK(responses[2].at("result").at("content")[0].value("text", std::string()).find("asset-test-agent") != std::string::npos);
+    CHECK(responses[3].at("result").at("content")[0].value("text", std::string()).find("tpl-test") != std::string::npos);
+    CHECK(responses[4].at("result").at("content")[0].value("text", std::string()).find("APPROVE") != std::string::npos);
+    CHECK(responses[5].at("result").value("isError", false));
+
+    fs::remove_all(root);
+}
+
+TEST(native_library_server_reads_and_audits) {
+    namespace lib = taskforge::libraries;
+    namespace nat = taskforge::native;
+    fs::path root = makeTempDir("native-library");
+    writeLibraryMcpFixture(root);
+
+    CHECK(nat::isNativeServer("arestrix.biblioteca"));
+    const nat::Server* server = nat::findServer("arestrix.biblioteca");
+    CHECK(server != nullptr);
+    CHECK(server->tools.size() == 7);
+
+    nat::Context ctx{root, taskforge::rt::RuntimeLang::Pt};
+    auto list = nat::call("arestrix.biblioteca", "library_list_assets", json{{"library", "lib-test"}}, ctx);
+    CHECK(!list.isError);
+    CHECK(list.content.find("asset-test-agent") != std::string::npos);
+    CHECK(list.content.find("Biblioteca de Teste") != std::string::npos);
+
+    auto get = nat::call("arestrix.biblioteca", "library_get_asset", json{{"id", "asset-test-agent"}}, ctx);
+    CHECK(!get.isError);
+    CHECK(get.content.find("tpl-test") != std::string::npos);
+
+    auto audit = nat::call("arestrix.biblioteca", "library_audit_asset",
+                           json{{"asset_id", "asset-test-agent"}}, ctx);
+    CHECK(!audit.isError);
+    CHECK(audit.content.find("APPROVE") != std::string::npos);
+
+    auto missing = nat::call("arestrix.biblioteca", "library_get_asset", json{{"id", "nao-existe"}}, ctx);
+    CHECK(missing.isError);
+
+    fs::remove_all(root);
+}
+
+TEST(library_mcp_server_scales_with_large_catalog) {
+    fs::path root = makeTempDir("library-mcp-stress");
+    fs::create_directories(root / ".workspace");
+    constexpr int kAssets = 2000;
+    {
+        json state = json::object();
+        state["version"] = 2;
+        state["libraries"] = json::array({
+            json{{"id", "library-arestrix"}, {"name", "Biblioteca Arestrix"}, {"description", ""},
+                 {"kind", "builtin"}, {"scope", "studio"}, {"createdAt", "2026-01-01T00:00:00Z"},
+                 {"isBuiltin", true}},
+            json{{"id", "lib-stress"}, {"name", "Biblioteca de Estresse"}, {"description", ""},
+                 {"kind", "local"}, {"scope", "workspace"}, {"createdAt", "2026-01-01T00:00:00Z"},
+                 {"isBuiltin", false}}
+        });
+        json assets = json::array();
+        for (int i = 0; i < kAssets; ++i) {
+            const std::string suffix = std::to_string(i);
+            assets.push_back(json{
+                {"id", "asset-stress-" + suffix},
+                {"libraryId", "lib-stress"},
+                {"kind", "mcp"},
+                {"name", "stress-" + suffix},
+                {"description", "Servidor MCP de estresse numero " + suffix},
+                {"category", "MCPs"},
+                {"domain", "Stress"},
+                {"subdomain", "Carga"},
+                {"version", "1.0.0"},
+                {"license", "MIT"},
+                {"status", "available"},
+                {"provenance", json{{"sourceKind", "workspace"}, {"sourceId", "lib-stress"},
+                                    {"importedAt", "2026-01-01T00:00:00Z"}}},
+                {"audit", json{{"verdict", "APPROVE"}, {"riskScore", 0}, {"policyVersion", "test"},
+                               {"hash", "hash-" + suffix}, {"findings", json::array()},
+                               {"warnings", json::array()}}},
+                {"payload", json{{"kind", "mcp"}, {"transport", "stdio"}, {"command", "node"},
+                                 {"args", json::array({"server.js"})},
+                                 {"cachedTools", json::array({json{{"name", "echo"}, {"description", "Echo"}}})}}},
+                {"createdAt", "2026-01-01T00:00:00Z"},
+                {"updatedAt", "2026-01-01T00:00:00Z"}
+            });
+        }
+        state["assets"] = assets;
+        state["updatedAt"] = "2026-01-01T00:00:00Z";
+        std::ofstream out(root / ".workspace" / "libraries.json", std::ios::binary);
+        out << state.dump();
+    }
+
+    constexpr int kCalls = 1000;
+    std::ostringstream script;
+    script << R"json({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}})json" << '\n';
+    for (int i = 0; i < kCalls; ++i) {
+        script << R"json({"jsonrpc":"2.0","id":)json" << (100 + i)
+               << R"json(,"method":"tools/call","params":{"name":"library_search_assets","arguments":{"query":"stress-42"}}})json"
+               << '\n';
+    }
+
+    const auto started = std::chrono::steady_clock::now();
+    std::istringstream input(script.str());
+    std::ostringstream output;
+    CHECK(taskforge::libraries::runLibraryMcpServer(input, output, root) == 0);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - started).count();
+    const double opsPerSecond = elapsed > 0 ? (kCalls * 1000.0 / static_cast<double>(elapsed)) : 0.0;
+    std::cout << "[benchmark] biblioteca MCP: " << kAssets << " assets, " << kCalls
+              << " buscas em " << elapsed << " ms (" << opsPerSecond << " ops/s)\n";
+    CHECK(elapsed < 10000);   // margem folgada; o numero real aparece no log
+
+    fs::remove_all(root);
+}
+
+TEST(assistant_library_tools_list_get_and_add_node) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    FakeAssistantHost host;
+    fs::path root = makeTempDir("assistant-library");
+    host.project["rootPath"] = root.string();
+    fs::create_directories(root / ".workspace");
+    {
+        std::ofstream out(root / ".workspace" / "libraries.json", std::ios::binary);
+        out << R"json({
+  "version": 2,
+  "libraries": [
+    {"id": "library-arestrix", "name": "Biblioteca Arestrix", "description": "", "kind": "builtin",
+     "scope": "studio", "createdAt": "2026-01-01T00:00:00Z", "isBuiltin": true},
+    {"id": "lib-test", "name": "Biblioteca de Teste", "description": "", "kind": "local",
+     "scope": "workspace", "createdAt": "2026-01-01T00:00:00Z", "isBuiltin": false}
+  ],
+  "assets": [
+    {
+      "id": "asset-test-agent",
+      "libraryId": "lib-test",
+      "kind": "agent-template",
+      "name": "test-agent",
+      "description": "Agente revisor de testes",
+      "category": "Agentes",
+      "domain": "Engenharia de Software",
+      "subdomain": "Code Review, Debug & Git",
+      "version": "1.0.0",
+      "license": "MIT",
+      "status": "installed",
+      "origin": {"repo": "example/repo", "url": "https://example.test", "license": "MIT",
+                 "installVersion": "1.0.0", "installHash": "hash-test"},
+      "provenance": {"sourceKind": "workspace", "sourceId": "lib-test", "importedAt": "2026-01-01T00:00:00Z"},
+      "audit": {"verdict": "APPROVE", "riskScore": 0, "policyVersion": "test", "hash": "hash-test",
+                "findings": [], "warnings": []},
+      "payload": {"kind": "agent-template", "template": {
+        "id": "tpl-test", "name": "test-agent", "taskType": "agent", "description": "",
+        "inputs": [{"name": "in", "type": "flow"}],
+        "outputs": [{"name": "out", "type": "flow"}],
+        "parameters": {"tone": {"label": "Tom", "type": "string", "defaultValue": "formal", "description": ""}},
+        "lambdaBodyTemplate": "",
+        "agentSettings": {"inheritSandbox": true, "inheritModel": false,
+                          "model": {"provider": "local", "model": "demo"},
+                          "skills": [], "activeSkillId": ""}
+      }},
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "asset-test-skill",
+      "libraryId": "lib-test",
+      "kind": "skill",
+      "name": "revisor-testes",
+      "description": "Revisa testes automatizados",
+      "category": "Skills",
+      "version": "1.0.0",
+      "license": "MIT",
+      "status": "available",
+      "provenance": {"sourceKind": "workspace", "sourceId": "lib-test", "importedAt": "2026-01-01T00:00:00Z"},
+      "audit": {"verdict": "APPROVE", "riskScore": 0, "policyVersion": "test", "hash": "hash-skill",
+                "findings": [], "warnings": []},
+      "payload": {"kind": "skill", "markdownContent": "# Revisor de testes",
+                  "systemPrompt": "Revise os testes.", "tools": ["read"]},
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "updatedAt": "2026-01-01T00:00:00Z"
+})json";
+    }
+
+    as::GraphDocument doc(as::GraphDocument::emptySchema("g", "p1"));
+
+    auto list = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "library_list_assets",
+                                         json{{"library", "lib-test"}});
+    CHECK(!list.result.isError);
+    CHECK(list.result.content.find("asset-test-agent") != std::string::npos);
+    CHECK(list.result.content.find("test-agent") != std::string::npos);
+    CHECK(list.result.content.find("Biblioteca de Teste") != std::string::npos);
+
+    auto builtin = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_list_assets",
+        json{{"library", "library-arestrix"}, {"limit", 5}});
+    CHECK(!builtin.result.isError);
+    auto builtinJson = taskforge::jsonutil::parse(builtin.result.content);
+    CHECK(builtinJson.value("total", 0) >= 300);
+    CHECK(builtinJson["assets"].size() == 5);
+    CHECK(builtinJson["assets"][0].value("kind", std::string()) == "agent-template");
+    CHECK(builtinJson["assets"][0].value("libraryName", std::string()) == "Biblioteca Arestrix");
+
+    auto filtered = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_list_assets",
+        json{{"library", "lib-test"}, {"domain", "Engenharia"}});
+    CHECK(!filtered.result.isError);
+    CHECK(filtered.result.content.find("asset-test-agent") != std::string::npos);
+    CHECK(filtered.result.content.find("asset-test-skill") == std::string::npos);
+
+    auto search = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_search_assets", json{{"query", "revisor"}});
+    CHECK(!search.result.isError);
+    CHECK(search.result.content.find("asset-test-agent") != std::string::npos);
+    CHECK(search.result.content.find("asset-test-skill") != std::string::npos);
+
+    auto got = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_get_asset", json{{"id", "asset-test-agent"}});
+    CHECK(!got.result.isError);
+    CHECK(got.result.content.find("tpl-test") != std::string::npos);
+    CHECK(got.result.content.find("hash-test") != std::string::npos);
+
+    auto add = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_add_node",
+        json{{"asset_id", "asset-test-agent"}, {"label", "Revisor"}, {"x", 120}, {"y", 80}});
+    CHECK(!add.result.isError);
+    auto added = taskforge::jsonutil::parse(add.result.content);
+    const std::string nodeId = added.value("node_id", std::string());
+    CHECK(!nodeId.empty());
+    auto node = doc.node(nodeId);
+    CHECK(node.has_value());
+    CHECK(node->value("type", std::string()) == "agent");
+    CHECK(node->value("label", std::string()) == "Revisor");
+    CHECK(node->at("position").value("x", 0.0) == 120.0);
+    CHECK(node->value("presetId", std::string()) == "tpl-test");
+    CHECK(node->at("agentSettings").value("inheritModel", true) == false);
+    CHECK(node->at("parameters").value("tone", std::string()) == "formal");
+    CHECK(node->at("librarySource").value("assetId", std::string()) == "asset-test-agent");
+    CHECK(add.uiOps.size() == 1);
+    CHECK(add.uiOps[0].value("op", std::string()) == "add_node");
+
+    auto skillNode = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_add_node", json{{"asset_id", "asset-test-skill"}});
+    CHECK(!skillNode.result.isError);
+    auto skillAdded = taskforge::jsonutil::parse(skillNode.result.content);
+    auto skillVertex = doc.node(skillAdded.value("node_id", std::string()));
+    CHECK(skillVertex.has_value());
+    CHECK(skillVertex->value("type", std::string()) == "agent");
+    CHECK(skillVertex->at("agentSettings").value("activeSkillId", std::string()) == "asset-test-skill");
+    CHECK(skillVertex->at("agentSettings").at("skills").size() == 1);
+
+    auto missing = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_add_node", json{{"asset_id", "nao-existe"}});
+    CHECK(missing.result.isError);
+
+    fs::remove_all(root);
+}
+
 TEST(assistant_attaches_only_audited_mcp_servers) {
     namespace as = taskforge::assistant;
     using taskforge::rt::RuntimeLang;
@@ -12268,6 +12698,105 @@ TEST(model_client_converts_history_for_openai_and_anthropic) {
     CHECK(rt::normalizeLocalBaseUrl("http://localhost:8080/custom") == "http://localhost:8080/custom");
     auto roundTrip = rt::ChatMessage::fromJson(a.toJson());
     CHECK(roundTrip.toolCalls.size() == 2 && roundTrip.reasoning == "pensando");
+}
+
+TEST(model_client_reasoning_effort_and_node_origin_roundtrip) {
+    namespace rt = taskforge::rt;
+    namespace core = taskforge::core;
+    using taskforge::compiler::TaskflowGenerator;
+
+    // 1. NodeData round-trip: preserves optional preset/origin fields and omits empty/false/null.
+    core::NodeData plainNode;
+    plainNode.id = "n_plain";
+    plainNode.label = "Plain";
+    plainNode.type = core::TaskflowNodeType::Agent;
+    plainNode.position = {1.0f, 2.0f, 0.0f};
+    json plainJson = plainNode;
+    CHECK(!plainJson.contains("presetId"));
+    CHECK(!plainJson.contains("presetLocked"));
+    CHECK(!plainJson.contains("hidden"));
+    CHECK(!plainJson.contains("presentation"));
+    CHECK(!plainJson.contains("librarySource"));
+    CHECK(!plainJson.contains("origin"));
+
+    core::NodeData presetNode = plainNode;
+    presetNode.id = "n_preset";
+    presetNode.presetId = "architect-v1";
+    presetNode.presetLocked = true;
+    presetNode.hidden = true;
+    presetNode.presentation = "agent";
+    presetNode.librarySource = json{{"libraryId", "core"}, {"assetId", "a1"}, {"hash", "h1"}, {"version", "1.0.0"}};
+    presetNode.origin = json{{"kind", "library"}, {"name", "Architect"}};
+    json presetJson = presetNode;
+    CHECK(presetJson.value("presetId", std::string()) == "architect-v1");
+    CHECK(presetJson.value("presetLocked", false) == true);
+    CHECK(presetJson.value("hidden", false) == true);
+    CHECK(presetJson.value("presentation", std::string()) == "agent");
+    CHECK(presetJson["librarySource"].value("assetId", std::string()) == "a1");
+    CHECK(presetJson["origin"].value("kind", std::string()) == "library");
+
+    auto parsedNode = presetJson.get<core::NodeData>();
+    CHECK(parsedNode.presetId == "architect-v1");
+    CHECK(parsedNode.presetLocked == true);
+    CHECK(parsedNode.hidden == true);
+    CHECK(parsedNode.presentation == "agent");
+    CHECK(parsedNode.librarySource.value("hash", std::string()) == "h1");
+    CHECK(parsedNode.origin.value("name", std::string()) == "Architect");
+
+    // 2. TaskflowGenerator::buildAgentSpec forwards reasoningEffort.
+    core::Graph g;
+    core::NodeData ag;
+    ag.id = "ag1";
+    ag.label = "Ag1";
+    ag.type = core::TaskflowNodeType::Agent;
+    ag.agentSettings = json{
+        {"inheritModel", false},
+        {"model", json{{"provider", "openai"}, {"model", "o3"}, {"reasoningEffort", "high"}}}
+    };
+    g.addNode(ag);
+    json spec = TaskflowGenerator::buildAgentSpec(g, ag);
+    CHECK(spec.value("reasoningEffort", std::string()) == "high");
+
+    // 3. ModelClient::buildRequestBody propagates reasoningEffort per protocol.
+    rt::ChatRequest req;
+    req.model = "m";
+    req.system = "sys";
+    req.maxTokens = 8192;
+    req.hasTemperature = true;
+    req.temperature = 0.2;
+    rt::ChatMessage u; u.role = "user"; u.text = "hi";
+    req.messages = {u};
+
+    // Empty and "none" omit reasoning_effort / thinking.
+    CHECK(!rt::buildRequestBody(rt::resolveProvider("openai"), req).contains("reasoning_effort"));
+    CHECK(!rt::buildRequestBody(rt::resolveProvider("anthropic"), req).contains("thinking"));
+    req.reasoningEffort = "none";
+    CHECK(!rt::buildRequestBody(rt::resolveProvider("openai"), req).contains("reasoning_effort"));
+    CHECK(!rt::buildRequestBody(rt::resolveProvider("google"), req).contains("reasoning_effort"));
+    CHECK(!rt::buildRequestBody(rt::resolveProvider("anthropic"), req).contains("thinking"));
+    CHECK(rt::buildRequestBody(rt::resolveProvider("anthropic"), req).contains("temperature"));
+
+    // OpenAI / DeepSeek / Google: low/medium/high direct, max -> high.
+    req.reasoningEffort = "medium";
+    CHECK(rt::buildRequestBody(rt::resolveProvider("openai"), req).value("reasoning_effort", std::string()) == "medium");
+    CHECK(rt::buildRequestBody(rt::resolveProvider("google"), req).value("reasoning_effort", std::string()) == "medium");
+    req.reasoningEffort = "max";
+    CHECK(rt::buildRequestBody(rt::resolveProvider("deepseek"), req).value("reasoning_effort", std::string()) == "high");
+
+    // Anthropic: thinking {type: "enabled", budget_tokens}, max_tokens > budget_tokens, omits temperature.
+    req.reasoningEffort = "low";
+    json anLow = rt::buildRequestBody(rt::resolveProvider("anthropic"), req);
+    CHECK(anLow["thinking"]["type"] == "enabled");
+    CHECK(anLow["thinking"]["budget_tokens"] == 2048);
+    CHECK(anLow["max_tokens"] == 8192);
+    CHECK(!anLow.contains("temperature"));
+
+    req.reasoningEffort = "max";
+    json anMax = rt::buildRequestBody(rt::resolveProvider("anthropic"), req);
+    CHECK(anMax["thinking"]["type"] == "enabled");
+    CHECK(anMax["thinking"]["budget_tokens"] == 32768);
+    CHECK(anMax["max_tokens"].get<int>() > 32768);
+    CHECK(!anMax.contains("temperature"));
 }
 
 TEST(model_client_ai_gateway_and_mistral_provider) {

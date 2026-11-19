@@ -170,6 +170,7 @@ struct AgentSpec {
     std::string model;
     bool hasTemperature = false;
     double temperature = 0.0;
+    std::string reasoningEffort;
     int maxTokens = 8192;
     int maxTurns = 30;
     int maxRuns = 10;
@@ -238,6 +239,7 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
         s.hasTemperature = true;
         s.temperature = j["temperature"].get<double>();
     }
+    s.reasoningEffort = j.value("reasoningEffort", "");
     s.maxTokens = j.value("maxTokens", 8192);
     s.maxTurns = j.value("maxTurns", 30);
     s.maxRuns = j.value("maxRuns", 10);
@@ -820,6 +822,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     chat.maxTokens = spec.maxTokens;
     chat.hasTemperature = spec.hasTemperature;
     chat.temperature = spec.temperature;
+    chat.reasoningEffort = spec.reasoningEffort;
     chat.httpAttempts = spec.httpAttempts;
     chat.telemetryId = nodeId;
     chat.agentId = nodeId;

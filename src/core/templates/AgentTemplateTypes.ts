@@ -1,4 +1,4 @@
-import { TaskflowNodeType, IGraphSchema, INodeAgentSettings } from '../types.ts';
+import { TaskflowNodeType, IGraphSchema, INodeAgentSettings, IAssetOriginMetadata } from '../types.ts';
 
 export interface ITemplateParameterDef {
   label: string;
@@ -56,6 +56,10 @@ export interface IAgentTemplate {
   /** Agente de biblioteca pronto: configuração travada na interface. */
   presetLocked?: boolean;
   isCustomPlugin?: boolean;
+  domain?: string;
+  subdomain?: string;
+  bundledInProduct?: boolean;
+  origin?: IAssetOriginMetadata;
   author?: string;
   version?: string;
 }
@@ -80,6 +84,10 @@ export interface ISerializedTemplatePlugin {
   presentation?: 'agent';
   /** Agente de biblioteca pronto: configuração travada na interface. */
   presetLocked?: boolean;
+  domain?: string;
+  subdomain?: string;
+  bundledInProduct?: boolean;
+  origin?: IAssetOriginMetadata;
   author?: string;
   version?: string;
 }

@@ -334,7 +334,7 @@ export const APPROVED_WORKSPACE_MCPS: IWorkspaceApprovedMcp[] = [
     category: 'Biblioteca & Agentes',
     transport: 'stdio',
     command: 'arestrix-mcp-biblioteca',
-    args: ['--scope', '.'],
+    args: ['--root', '.'],
     isPreApproved: true,
     tools: [
       { name: 'library_list_assets', description: 'Lista assets de uma biblioteca, com filtro por tipo e domínio', riskLevel: 'safe' },

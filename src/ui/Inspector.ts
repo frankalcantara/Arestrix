@@ -385,8 +385,7 @@ export class Inspector {
       z: node.position.z ?? 0
     };
     copy.presetLocked = false;
-    delete copy.presetId;
-    delete copy.templateId;
+    // Preserva presetId, templateId, librarySource e origin para manter a origem recuperável.
     copy.inputs = copy.inputs.map((port, index) => ({ ...port, id: `${copy.id}_in_${index}` }));
     copy.outputs = copy.outputs.map((port, index) => ({ ...port, id: `${copy.id}_out_${index}` }));
     this.graph.commandManager.execute(new AddNodeCommand(this.graph, copy));
@@ -510,6 +509,7 @@ export class Inspector {
           <div class="office-node-badge-row">
             <span class="inspector-badge badge-${node.type}">${typeLabel}</span>
             ${tpl ? `<span class="inspector-template-tag">${tpl.icon} ${this.escapeHtml(tpl.name)}</span>` : ''}
+            ${this.isBundledProductNode(node) ? `<span class="properties-badge properties-badge--success" data-badge-bundled-product>${t('inspector.library.bundled_badge', 'Nativo Arestrix')}</span>` : ''}
           </div>
 
           <div class="form-group">
@@ -558,6 +558,7 @@ export class Inspector {
             ${this.renderPipelineAgentSection(node)}
           ` : ''}
           ${this.renderLibraryUpdate(node)}
+          ${this.renderBundledOriginSection(node)}
 
           ${(node.type === 'subflow' || node.type === 'module') ? `
             <div class="form-group">
@@ -1645,6 +1646,39 @@ export class Inspector {
     `;
   }
 
+  private isBundledProductNode(node: INodeData): boolean {
+    return Boolean(
+      node.origin?.bundledInProduct
+      || node.librarySource?.bundledInProduct
+      || node.librarySource?.libraryId === 'library-arestrix'
+    );
+  }
+
+  private renderBundledOriginSection(node: INodeData): string {
+    if (!this.isBundledProductNode(node) && !node.origin) return '';
+    const repo = node.origin?.repo || node.librarySource?.originRepo || '';
+    const license = node.origin?.license || node.librarySource?.originLicense || '';
+    const rawUrl = node.origin?.url || node.librarySource?.originUrl || '';
+    const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '';
+    const installVersion = node.origin?.installVersion || node.librarySource?.version || '';
+
+    return `
+      <div class="properties-note properties-note--info" data-bundled-origin-card style="margin-top: 8px;">
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
+          ${this.isBundledProductNode(node) ? `<span class="properties-badge properties-badge--success">${t('inspector.library.bundled_badge', 'Nativo Arestrix')}</span>` : ''}
+          <strong>${t('inspector.library.origin_label', 'Origem recuperável')}</strong>
+        </div>
+        ${repo ? `<div>${t('inspector.library.origin_repo', 'Repositório')}: <code>${this.escapeHtml(repo)}</code></div>` : ''}
+        ${license ? `<div>${t('inspector.library.origin_license', 'Licença')}: ${this.escapeHtml(license)}</div>` : ''}
+        ${installVersion ? `<div>${t('inspector.library.origin_version', 'Versão de instalação')}: ${this.escapeHtml(installVersion)}</div>` : ''}
+        ${safeUrl ? `<div>${t('inspector.library.origin_url', 'Link')}: <a href="${this.escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(safeUrl)}</a></div>` : ''}
+        <button type="button" id="btn-restore-install-default" class="btn btn-secondary" style="margin-top: 8px;">
+          ${t('inspector.library.restore_install_default', 'Restaurar padrão de instalação')}
+        </button>
+      </div>
+    `;
+  }
+
   private libraryService(): LibraryService {
     return LibraryService.getInstance();
   }
@@ -1741,6 +1775,128 @@ export class Inspector {
       if (!confirmed) return;
       this.applyLibraryAssetUpdate(node, asset);
     });
+    this.container.querySelector('#btn-restore-install-default')?.addEventListener('click', () => {
+      this.restoreInstallDefault(node);
+    });
+  }
+
+  private restoreInstallDefault(node: INodeData): void {
+    const service = this.libraryService() as LibraryService & {
+      getInstallDefaultAsset?: (assetId: string) => ILibraryAsset | undefined;
+    };
+    const registryWithPatch = this.registry as AgentTemplateRegistry & {
+      buildInstallDefaultNodePatch?: (
+        n: INodeData,
+        svc: LibraryService
+      ) => { oldProps?: Partial<INodeData>; newProps?: Partial<INodeData>; asset?: ILibraryAsset } | Partial<INodeData> | null | undefined;
+    };
+    const staticBuilder = (AgentTemplateRegistry as unknown as {
+      buildInstallDefaultNodePatch?: (
+        n: INodeData,
+        svc: LibraryService
+      ) => { oldProps?: Partial<INodeData>; newProps?: Partial<INodeData>; asset?: ILibraryAsset } | Partial<INodeData> | null | undefined;
+    }).buildInstallDefaultNodePatch;
+
+    const rawPatch =
+      registryWithPatch.buildInstallDefaultNodePatch?.(node, service)
+      ?? staticBuilder?.(node, service);
+
+    let oldProps: Partial<INodeData> | undefined;
+    let newProps: Partial<INodeData> | undefined;
+    let targetTemplate: ISerializedTemplatePlugin | undefined;
+
+    if (rawPatch && typeof rawPatch === 'object') {
+      if ('newProps' in rawPatch && rawPatch.newProps) {
+        newProps = rawPatch.newProps;
+        oldProps = rawPatch.oldProps;
+        if (rawPatch.asset) targetTemplate = this.assetTemplate(rawPatch.asset);
+      } else {
+        newProps = rawPatch as Partial<INodeData>;
+      }
+    }
+
+    if (!newProps) {
+      const assetId = node.origin?.assetId || node.librarySource?.assetId || '';
+      const defaultAsset = assetId ? service.getInstallDefaultAsset?.(assetId) : undefined;
+      const assetTemplate = defaultAsset ? this.assetTemplate(defaultAsset) : undefined;
+      const regTpl = node.templateId ? this.registry.getTemplate(node.templateId) : undefined;
+      targetTemplate = assetTemplate;
+
+      if (defaultAsset && assetTemplate) {
+        newProps = {
+          agentSettings: assetTemplate.agentSettings ? this.cloneJson(assetTemplate.agentSettings) : node.agentSettings,
+          requiredHeaders: assetTemplate.requiredHeaders ?? node.requiredHeaders,
+          presetId: assetTemplate.id,
+          templateId: assetTemplate.id,
+          presetLocked: assetTemplate.presetLocked !== false,
+          librarySource: {
+            libraryId: defaultAsset.libraryId,
+            assetId: defaultAsset.id,
+            hash: defaultAsset.audit.hash,
+            version: defaultAsset.version,
+            bundledInProduct: defaultAsset.bundledInProduct ?? defaultAsset.origin?.bundledInProduct,
+            originRepo: defaultAsset.origin?.repo ?? defaultAsset.provenance.repo,
+            originUrl: defaultAsset.origin?.url ?? defaultAsset.provenance.url,
+            originLicense: defaultAsset.origin?.license ?? defaultAsset.license
+          },
+          origin: defaultAsset.origin ? this.cloneJson(defaultAsset.origin) : node.origin
+        };
+      } else if (regTpl) {
+        newProps = {
+          agentSettings: regTpl.agentSettings ? this.cloneJson(regTpl.agentSettings) : node.agentSettings,
+          requiredHeaders: regTpl.requiredHeaders ?? node.requiredHeaders,
+          presetId: regTpl.id,
+          templateId: regTpl.id,
+          presetLocked: regTpl.presetLocked !== false,
+          origin: regTpl.origin ? this.cloneJson(regTpl.origin) : node.origin
+        };
+      }
+    }
+
+    if (!newProps) {
+      this.bus.emit('notification:show', {
+        severity: 'warning',
+        title: t('inspector.library.restore_install_default', 'Restaurar padrão de instalação'),
+        message: t('inspector.library.restore_unavailable', 'Padrão de instalação não encontrado para este vértice.')
+      });
+      return;
+    }
+
+    const nextAgentSettings = newProps.agentSettings ?? targetTemplate?.agentSettings;
+    const changedFields = nextAgentSettings ? diffAgentSettings(node.agentSettings, nextAgentSettings) : [];
+    const diffSummary = changedFields.length > 0
+      ? t('inspector.library.restore_diff_summary', ' Alterações detectadas: {{fields}}.', { fields: changedFields.join(', ') })
+      : '';
+    const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+      ? true
+      : window.confirm(t(
+        'inspector.library.confirm_restore_default',
+        'Restaurar este vértice para o padrão de instalação de fábrica?{{diff}}',
+        { diff: diffSummary }
+      ));
+    if (!confirmed) return;
+
+    if (!oldProps) {
+      oldProps = {};
+      (Object.keys(newProps) as Array<keyof INodeData>).forEach((key) => {
+        (oldProps as Record<string, unknown>)[key] = node[key] !== undefined ? this.cloneJson(node[key]) : undefined;
+      });
+    }
+
+    this.graph.commandManager.execute(new UpdateNodeCommand(
+      this.graph,
+      node.id,
+      oldProps,
+      newProps,
+      t('inspector.library.restore_command', 'Restaurar padrão de instalação')
+    ));
+    const fresh = this.graph.getNode(node.id);
+    if (fresh) this.renderNode(fresh);
+    this.bus.emit('notification:show', {
+      severity: 'success',
+      title: t('inspector.library.restore_install_default', 'Restaurar padrão de instalação'),
+      message: t('inspector.library.restored_success', 'Vértice restaurado para o padrão de instalação.')
+    });
   }
 
   private applyLibraryAssetUpdate(node: INodeData, asset: ILibraryAsset): void {
@@ -1751,6 +1907,19 @@ export class Inspector {
     } else {
       this.applyAgentPresetUpdate(node, asset, template);
     }
+  }
+
+  private buildLibrarySourceFromAsset(asset: ILibraryAsset): NonNullable<INodeData['librarySource']> {
+    return {
+      libraryId: asset.libraryId,
+      assetId: asset.id,
+      hash: asset.audit.hash,
+      version: asset.version,
+      bundledInProduct: asset.bundledInProduct ?? asset.origin?.bundledInProduct,
+      originRepo: asset.origin?.repo ?? asset.provenance.repo,
+      originUrl: asset.origin?.url ?? asset.provenance.url,
+      originLicense: asset.origin?.license ?? asset.license
+    };
   }
 
   private assetTemplate(asset: ILibraryAsset): ISerializedTemplatePlugin | undefined {
@@ -1776,12 +1945,8 @@ export class Inspector {
     nextSettings.pipelineInputs = this.mergePipelineInputs(nextSettings.pipelineInputs, nextInterface.inputs);
 
     const { ports, removedPortIds } = this.buildUpdatedPipelinePorts(node, nextInterface.outputs ?? []);
-    const librarySource = {
-      libraryId: asset.libraryId,
-      assetId: asset.id,
-      hash: asset.audit.hash,
-      version: asset.version
-    };
+    const librarySource = this.buildLibrarySourceFromAsset(asset);
+    const nextOrigin = asset.origin ? this.cloneJson(asset.origin) : node.origin;
     const commands: Array<UpdateNodeCommand | RemoveEdgeCommand> = [
       new UpdateNodeCommand(
         this.graph,
@@ -1792,7 +1957,8 @@ export class Inspector {
           callSettings: node.callSettings,
           templateId: node.templateId,
           presetId: node.presetId,
-          librarySource: node.librarySource
+          librarySource: node.librarySource,
+          origin: node.origin
         },
         {
           outputs: ports,
@@ -1800,7 +1966,8 @@ export class Inspector {
           callSettings: nextSettings,
           templateId: template.id,
           presetId: template.id,
-          librarySource
+          librarySource,
+          origin: nextOrigin
         },
         t('inspector.library.update_command', 'Atualizar vértice da biblioteca')
       )
@@ -1855,6 +2022,7 @@ export class Inspector {
     const nextSettings = template.agentSettings
       ? this.cloneJson(template.agentSettings)
       : node.agentSettings;
+    const nextOrigin = asset.origin ? this.cloneJson(asset.origin) : node.origin;
     this.graph.commandManager.execute(new UpdateNodeCommand(
       this.graph,
       node.id,
@@ -1863,19 +2031,16 @@ export class Inspector {
         requiredHeaders: node.requiredHeaders,
         presetId: node.presetId,
         presetLocked: node.presetLocked,
-        librarySource: node.librarySource
+        librarySource: node.librarySource,
+        origin: node.origin
       },
       {
         agentSettings: nextSettings,
         requiredHeaders: template.requiredHeaders ?? node.requiredHeaders,
         presetId: template.id,
         presetLocked: template.presetLocked !== false,
-        librarySource: {
-          libraryId: asset.libraryId,
-          assetId: asset.id,
-          hash: asset.audit.hash,
-          version: asset.version
-        }
+        librarySource: this.buildLibrarySourceFromAsset(asset),
+        origin: nextOrigin
       },
       t('inspector.library.update_command', 'Atualizar vértice da biblioteca')
     ));

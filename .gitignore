@@ -80,6 +80,8 @@ continue-aqui.mcp
 # Saidas locais de trabalho do agente (nao fazem parte do produto)
 /Claude outputs/
 /scripts/agent_crawler/
+/scripts/mcp_crawler/cache/
+/scripts/mcp_crawler/output/
 
 # Modelos e pesos de IA locais
 *.gguf

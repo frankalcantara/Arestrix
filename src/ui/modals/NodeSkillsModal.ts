@@ -21,7 +21,7 @@ import { t } from '../../i18n/index.ts';
  *    entrar no vértice.
  * 
  * NOTA: A gestão de fontes e bibliotecas é global do Studio/Workspace e vive
- * nas telas de Propriedades (evento `properties:open`, seção `libraries`).
+ * nas telas de Propriedades (seção `libraries`) e na página Biblioteca de Ativos do Backstage.
  */
 export class NodeSkillsModal extends BaseModal {
   private graph: Graph;
@@ -511,9 +511,10 @@ export class NodeSkillsModal extends BaseModal {
     // Fechar
     this.dialog.querySelector('#btn-footer-close-skills')?.addEventListener('click', () => this.hide());
 
-    // Botão para abrir o modal global de repositórios
+    // Botão para abrir a página de biblioteca de ativos no Backstage
     const openGlobalReposHandler = () => {
-      this.bus?.emit('properties:open', { scope: 'studio', section: 'libraries' });
+      this.bus?.emit('backstage:open', { section: 'library' });
+      this.hide();
     };
     this.dialog.querySelector('#btn-open-global-repos-from-node')?.addEventListener('click', openGlobalReposHandler);
     this.dialog.querySelector('#btn-empty-open-global-repos')?.addEventListener('click', openGlobalReposHandler);

@@ -1,10 +1,16 @@
-import { IGitHubSkillItem } from '../types.ts';
+import type { IAssetOriginMetadata, IGitHubSkillItem } from '../types.ts';
+import type { ISerializedTemplatePlugin } from '../templates/AgentTemplateTypes.ts';
+import { LibraryAuditGate } from './LibraryAuditGate.ts';
+import { builtinSkillToAsset, skillAssetId } from './adapters/skillAssetAdapter.ts';
+import type { ILibraryAsset, ILibraryAssetAudit, ILibraryState, IMcpAssetPayload } from './types.ts';
+import bundledAgentCatalog from './catalog/bundledAgentVertices.json';
+import bundledMcpCatalog from './catalog/bundledMcpServers.json';
 
 /**
  * Arestrix Studio - Catálogo Embutido da Biblioteca Arestrix
  *
- * Skills que acompanham o Studio. Elas são copiadas para a biblioteca e
- * auditadas no momento da importação; nenhum asset é baixado da internet aqui.
+ * Skills e vértices de agentes que acompanham o Studio. Eles são auditados e
+ * hidratados localmente; nenhum asset é baixado da internet aqui.
  */
 
 export const BUILTIN_LIBRARY_SKILLS: IGitHubSkillItem[] = [
@@ -206,3 +212,453 @@ tools:
 Padrão ouro para evitar vazamento de prompt, injeção de instruções e garantir determinismo nas respostas dos agentes.`
     }
   ];
+
+export interface IBundledAgentVertexEntry {
+  id: string;
+  name: string;
+  description: string;
+  domain: string;
+  subdomain: string;
+  category: string;
+  icon: string;
+  license: string;
+  bundledInProduct: true;
+  qualityScore?: number;
+  selectionScore?: number;
+  origin: IAssetOriginMetadata;
+  template: ISerializedTemplatePlugin;
+}
+
+const DEFAULT_LIBRARY_ID = 'library-arestrix';
+
+function cloneData<T>(value: T): T {
+  if (value === undefined || value === null) return value;
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+const rawBundledCatalog = bundledAgentCatalog as unknown as {
+  generatedAt?: string;
+  items?: IBundledAgentVertexEntry[];
+};
+
+export const BUNDLED_AGENT_CATALOG_GENERATED_AT: string =
+  rawBundledCatalog.generatedAt || '2026-11-18T00:00:00.000Z';
+
+export const BUNDLED_AGENT_VERTICES: readonly IBundledAgentVertexEntry[] =
+  Array.isArray(rawBundledCatalog.items) ? rawBundledCatalog.items : [];
+
+const bundledByEntryId = new Map<string, IBundledAgentVertexEntry>();
+const bundledByOriginAssetId = new Map<string, IBundledAgentVertexEntry>();
+const bundledByTemplateId = new Map<string, IBundledAgentVertexEntry>();
+
+for (const entry of BUNDLED_AGENT_VERTICES) {
+  if (!entry || !entry.id || !entry.template) continue;
+  bundledByEntryId.set(entry.id, entry);
+  if (entry.origin?.assetId) {
+    bundledByOriginAssetId.set(entry.origin.assetId, entry);
+  }
+  if (entry.template.id && !bundledByTemplateId.has(entry.template.id)) {
+    bundledByTemplateId.set(entry.template.id, entry);
+  }
+  if (entry.origin?.templateId && !bundledByTemplateId.has(entry.origin.templateId)) {
+    bundledByTemplateId.set(entry.origin.templateId, entry);
+  }
+}
+
+/**
+ * Busca um vértice de agente embutido por `entry.id`, `origin.assetId`,
+ * `template.id` ou `origin.templateId`, retornando sempre um clone imutável.
+ */
+export function getBundledAgentVertexById(idOrTemplateId: string): IBundledAgentVertexEntry | undefined {
+  if (!idOrTemplateId) return undefined;
+  const hit =
+    bundledByEntryId.get(idOrTemplateId) ||
+    bundledByOriginAssetId.get(idOrTemplateId) ||
+    bundledByTemplateId.get(idOrTemplateId);
+  return hit ? cloneData(hit) : undefined;
+}
+
+function buildBundledAgentAssetId(entry: IBundledAgentVertexEntry, libraryId: string): string {
+  if (libraryId === DEFAULT_LIBRARY_ID) return entry.id;
+  if (entry.id.startsWith(`asset-${DEFAULT_LIBRARY_ID}-`)) {
+    return entry.id.replace(`asset-${DEFAULT_LIBRARY_ID}-`, `asset-${libraryId}-`);
+  }
+  return `asset-${libraryId}-agent-${entry.template.id}`;
+}
+
+/**
+ * Converte um item do catálogo embutido de agentes em um `ILibraryAsset`
+ * pronto para o `LibraryRegistry`, com cópias isoladas de `origin` e `template`.
+ */
+export function bundledAgentVertexToLibraryAsset(
+  entry: IBundledAgentVertexEntry,
+  libraryId: string = DEFAULT_LIBRARY_ID
+): ILibraryAsset {
+  const originCopy = cloneData(entry.origin);
+  originCopy.bundledInProduct = true;
+  originCopy.sourceKind = 'builtin';
+
+  const templateCopy = cloneData(entry.template);
+  templateCopy.domain = entry.domain;
+  templateCopy.subdomain = entry.subdomain;
+  templateCopy.bundledInProduct = true;
+  templateCopy.origin = cloneData(originCopy);
+  templateCopy.presetLocked = templateCopy.presetLocked !== false;
+
+  const version = originCopy.installVersion || templateCopy.version || '1.0.0';
+
+  return {
+    id: buildBundledAgentAssetId(entry, libraryId),
+    libraryId,
+    kind: 'agent-template',
+    name: entry.name,
+    description: entry.description,
+    category: entry.category || 'Agentes',
+    domain: entry.domain,
+    subdomain: entry.subdomain,
+    icon: entry.icon,
+    bundledInProduct: true,
+    origin: originCopy,
+    qualityScore: entry.qualityScore,
+    selectionScore: entry.selectionScore,
+    version,
+    license: entry.license || originCopy.license || 'MIT',
+    status: 'available',
+    provenance: {
+      sourceKind: 'builtin',
+      sourceId: libraryId,
+      repo: originCopy.repo,
+      path: originCopy.path,
+      url: originCopy.url,
+      authority: 'Arestrix',
+      importedAt: BUNDLED_AGENT_CATALOG_GENERATED_AT
+    },
+    audit: {
+      verdict: 'APPROVE',
+      riskScore: 0,
+      policyVersion: 'bundled-v1',
+      auditedAt: BUNDLED_AGENT_CATALOG_GENERATED_AT,
+      hash: originCopy.installHash,
+      findings: [],
+      warnings: []
+    },
+    payload: {
+      kind: 'agent-template',
+      template: templateCopy
+    },
+    createdAt: BUNDLED_AGENT_CATALOG_GENERATED_AT,
+    updatedAt: BUNDLED_AGENT_CATALOG_GENERATED_AT
+  };
+}
+
+export function getBundledAgentAssets(libraryId: string = DEFAULT_LIBRARY_ID): ILibraryAsset[] {
+  return BUNDLED_AGENT_VERTICES.map(entry => bundledAgentVertexToLibraryAsset(entry, libraryId));
+}
+
+export interface IBundledMcpServerEntry {
+  id: string;
+  serverId: string;
+  name: string;
+  description: string;
+  domain: string;
+  subdomain: string;
+  category: string;
+  icon: string;
+  version: string;
+  license: string;
+  bundledInProduct: true;
+  qualityScore: number;
+  selectionScore: number;
+  defaultTool?: string;
+  cppAdaptations?: string[];
+  origin: IAssetOriginMetadata;
+  audit: Omit<ILibraryAssetAudit, 'auditedAt'> & { auditedAt?: string };
+  payload: IMcpAssetPayload;
+}
+
+interface IBundledMcpCatalogFile {
+  format: string;
+  version: string;
+  generatedAt: string;
+  totalCount: number;
+  items: IBundledMcpServerEntry[];
+}
+
+const rawBundledMcpCatalog = bundledMcpCatalog as unknown as IBundledMcpCatalogFile;
+
+export const BUNDLED_MCP_CATALOG_GENERATED_AT: string =
+  rawBundledMcpCatalog.generatedAt || BUNDLED_AGENT_CATALOG_GENERATED_AT;
+
+export const BUNDLED_MCP_SERVERS: readonly IBundledMcpServerEntry[] =
+  Array.isArray(rawBundledMcpCatalog.items) ? rawBundledMcpCatalog.items : [];
+
+const bundledMcpById = new Map<string, IBundledMcpServerEntry>();
+const bundledMcpByServerId = new Map<string, IBundledMcpServerEntry>();
+
+for (const entry of BUNDLED_MCP_SERVERS) {
+  if (!entry || !entry.id || !entry.serverId || !entry.payload) continue;
+  bundledMcpById.set(entry.id, entry);
+  bundledMcpByServerId.set(entry.serverId, entry);
+}
+
+export function getBundledMcpServerById(idOrServerId: string): IBundledMcpServerEntry | undefined {
+  if (!idOrServerId) return undefined;
+  const hit = bundledMcpById.get(idOrServerId) || bundledMcpByServerId.get(idOrServerId);
+  return hit ? cloneData(hit) : undefined;
+}
+
+function buildBundledMcpAssetId(entry: IBundledMcpServerEntry, libraryId: string): string {
+  if (libraryId === DEFAULT_LIBRARY_ID) return entry.id;
+  return `asset-${libraryId}-${entry.serverId}`.slice(0, 64);
+}
+
+export function bundledMcpToLibraryAsset(
+  entry: IBundledMcpServerEntry,
+  libraryId: string = DEFAULT_LIBRARY_ID
+): ILibraryAsset {
+  const originCopy = cloneData(entry.origin);
+  originCopy.bundledInProduct = true;
+  originCopy.sourceKind = 'builtin';
+  originCopy.libraryId = libraryId;
+
+  const payloadCopy = cloneData(entry.payload);
+  const assetId = buildBundledMcpAssetId(entry, libraryId);
+  originCopy.assetId = assetId;
+
+  return {
+    id: assetId,
+    libraryId,
+    kind: 'mcp',
+    name: entry.name,
+    description: entry.description,
+    category: entry.category || entry.subdomain || 'MCP',
+    domain: entry.domain,
+    subdomain: entry.subdomain,
+    icon: entry.icon || '🔌',
+    bundledInProduct: true,
+    origin: originCopy,
+    qualityScore: entry.qualityScore,
+    selectionScore: entry.selectionScore,
+    version: entry.version || '1.0.0',
+    license: entry.license || originCopy.license || 'MIT',
+    status: 'available',
+    provenance: {
+      sourceKind: 'builtin',
+      sourceId: libraryId,
+      repo: originCopy.repo,
+      path: originCopy.path,
+      url: originCopy.url,
+      authority: 'Arestrix',
+      importedAt: BUNDLED_MCP_CATALOG_GENERATED_AT
+    },
+    audit: {
+      verdict: entry.audit.verdict,
+      riskScore: entry.audit.riskScore,
+      policyVersion: entry.audit.policyVersion || 'mcp-scanner-v1',
+      auditedAt: entry.audit.auditedAt || BUNDLED_MCP_CATALOG_GENERATED_AT,
+      hash: originCopy.installHash,
+      findings: [...(entry.audit.findings || [])],
+      warnings: [...(entry.audit.warnings || [])]
+    },
+    payload: payloadCopy,
+    createdAt: BUNDLED_MCP_CATALOG_GENERATED_AT,
+    updatedAt: BUNDLED_MCP_CATALOG_GENERATED_AT
+  };
+}
+
+export function getBundledMcpAssets(libraryId: string = DEFAULT_LIBRARY_ID): ILibraryAsset[] {
+  return BUNDLED_MCP_SERVERS.map(entry => bundledMcpToLibraryAsset(entry, libraryId));
+}
+
+let cachedDefaultSkillAssets: ILibraryAsset[] | null = null;
+const skillByRawId = new Map<string, IGitHubSkillItem>();
+for (const skill of BUILTIN_LIBRARY_SKILLS) {
+  skillByRawId.set(skill.id, skill);
+}
+
+function buildBuiltinSkillAsset(item: IGitHubSkillItem, libraryId: string): ILibraryAsset {
+  const gate = LibraryAuditGate.getInstance();
+  const audit = gate.auditSkill({
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    markdownContent: item.markdownContent,
+    systemPrompt: item.systemPrompt,
+    tools: item.tools,
+    license: item.license
+  });
+  const asset = builtinSkillToAsset(item, libraryId, audit);
+  asset.bundledInProduct = true;
+  asset.provenance.importedAt = BUNDLED_AGENT_CATALOG_GENERATED_AT;
+  asset.createdAt = BUNDLED_AGENT_CATALOG_GENERATED_AT;
+  asset.updatedAt = BUNDLED_AGENT_CATALOG_GENERATED_AT;
+  return asset;
+}
+
+export function getBundledSkillAssets(libraryId: string = DEFAULT_LIBRARY_ID): ILibraryAsset[] {
+  if (libraryId === DEFAULT_LIBRARY_ID) {
+    if (!cachedDefaultSkillAssets) {
+      cachedDefaultSkillAssets = BUILTIN_LIBRARY_SKILLS.map(item => buildBuiltinSkillAsset(item, DEFAULT_LIBRARY_ID));
+    }
+    return cachedDefaultSkillAssets.map(asset => cloneData(asset));
+  }
+  return BUILTIN_LIBRARY_SKILLS.map(item => buildBuiltinSkillAsset(item, libraryId));
+}
+
+export function getBundledFactoryAssets(libraryId: string = DEFAULT_LIBRARY_ID): ILibraryAsset[] {
+  return [
+    ...getBundledSkillAssets(libraryId),
+    ...getBundledAgentAssets(libraryId),
+    ...getBundledMcpAssets(libraryId)
+  ];
+}
+
+export function getBundledFactoryAssetById(
+  idOrTemplateId: string,
+  libraryId: string = DEFAULT_LIBRARY_ID
+): ILibraryAsset | null {
+  if (!idOrTemplateId) return null;
+
+  const skillAssets = getBundledSkillAssets(libraryId);
+  const directSkill = skillAssets.find(asset =>
+    asset.id === idOrTemplateId ||
+    asset.id === skillAssetId(libraryId, idOrTemplateId)
+  );
+  if (directSkill) return directSkill;
+
+  const entry = getBundledAgentVertexById(idOrTemplateId);
+  if (entry) return bundledAgentVertexToLibraryAsset(entry, libraryId);
+
+  const mcpEntry = getBundledMcpServerById(idOrTemplateId);
+  if (mcpEntry) return bundledMcpToLibraryAsset(mcpEntry, libraryId);
+
+  return null;
+}
+
+function getFactoryIdentityMap(): Map<string, { hash: string; name: string; version: string }> {
+  const map = new Map<string, { hash: string; name: string; version: string }>();
+  for (const skill of getBundledSkillAssets(DEFAULT_LIBRARY_ID)) {
+    map.set(skill.id, { hash: skill.audit.hash, name: skill.name, version: skill.version });
+  }
+  for (const entry of BUNDLED_AGENT_VERTICES) {
+    map.set(entry.id, {
+      hash: entry.origin.installHash,
+      name: entry.name,
+      version: entry.origin.installVersion || entry.template.version || '1.0.0'
+    });
+  }
+  for (const entry of BUNDLED_MCP_SERVERS) {
+    map.set(entry.id, {
+      hash: entry.origin.installHash,
+      name: entry.name,
+      version: entry.version || '1.0.0'
+    });
+  }
+  return map;
+}
+
+let cachedFactoryIdentityMap: Map<string, { hash: string; name: string; version: string }> | null = null;
+
+function factoryIdentityMap(): Map<string, { hash: string; name: string; version: string }> {
+  if (!cachedFactoryIdentityMap) {
+    cachedFactoryIdentityMap = getFactoryIdentityMap();
+  }
+  return cachedFactoryIdentityMap;
+}
+
+export function isUnmodifiedFactoryBundledAsset(asset: ILibraryAsset): boolean {
+  if (!asset.bundledInProduct || asset.libraryId !== DEFAULT_LIBRARY_ID || asset.derivedFrom) {
+    return false;
+  }
+  const factory = factoryIdentityMap().get(asset.id);
+  if (!factory) return false;
+  return (
+    asset.status === 'available' &&
+    asset.audit?.hash === factory.hash &&
+    asset.name === factory.name &&
+    asset.version === factory.version
+  );
+}
+
+/**
+ * Compacta um snapshot de biblioteca para persistência em `localStorage`/Workspace,
+ * removendo payloads completos dos assets embutidos de fábrica sem modificar
+ * assets customizados, derivados ou alterados pelo usuário.
+ */
+export function compactLibraryStateForStorage(state: ILibraryState): ILibraryState {
+  const identityMap = factoryIdentityMap();
+  const compactedAssets: ILibraryAsset[] = [];
+
+  for (const asset of state.assets || []) {
+    if (asset.bundledInProduct && asset.libraryId === DEFAULT_LIBRARY_ID && !asset.derivedFrom) {
+      const factory = identityMap.get(asset.id);
+      if (
+        factory &&
+        asset.audit?.hash === factory.hash &&
+        asset.name === factory.name &&
+        asset.version === factory.version
+      ) {
+        // Asset de fábrica não modificado: não precisa gravar payload (~6 MB total).
+        if (asset.status === 'available') {
+          continue;
+        }
+        // Apenas status alterado (installed/pinned/disabled): grava stub leve sem payload pesado.
+        compactedAssets.push({
+          id: asset.id,
+          libraryId: asset.libraryId,
+          kind: asset.kind,
+          name: asset.name,
+          description: '',
+          category: asset.category,
+          version: asset.version,
+          license: asset.license,
+          status: asset.status,
+          bundledInProduct: true,
+          provenance: {
+            sourceKind: 'builtin',
+            sourceId: asset.libraryId,
+            importedAt: asset.provenance?.importedAt || BUNDLED_AGENT_CATALOG_GENERATED_AT
+          },
+          audit: {
+            verdict: asset.audit.verdict,
+            riskScore: asset.audit.riskScore,
+            policyVersion: asset.audit.policyVersion,
+            hash: factory.hash,
+            findings: [],
+            warnings: []
+          },
+          payload: asset.kind === 'skill'
+            ? { kind: 'skill', markdownContent: '', systemPrompt: '', tools: [] }
+            : asset.kind === 'mcp'
+              ? { kind: 'mcp', transport: 'stdio', command: '', args: [], url: '', cachedTools: [] }
+              : {
+                  kind: 'agent-template',
+                  template: {
+                    id: asset.origin?.templateId || '',
+                    name: asset.name,
+                    taskType: 'agent',
+                    description: '',
+                    inputs: [],
+                    outputs: [],
+                    lambdaBodyTemplate: ''
+                  }
+                },
+          createdAt: asset.createdAt,
+          updatedAt: asset.updatedAt
+        });
+        continue;
+      }
+    }
+    compactedAssets.push({ ...asset });
+  }
+
+  return {
+    ...state,
+    libraries: (state.libraries || []).map(lib => ({ ...lib })),
+    assets: compactedAssets,
+    sources: state.sources ? state.sources.map(src => ({ ...src })) : undefined
+  };
+}

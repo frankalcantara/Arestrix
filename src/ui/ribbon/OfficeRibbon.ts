@@ -696,7 +696,7 @@ export class OfficeRibbon {
         { id: 'memory', label: t('search.cmd_memory', 'Memória do projeto'), keywords: ['memoria', 'memória', 'memory'], run: () => this.projectMemoryModal.show() },
         { id: 'batch', label: t('search.cmd_batch', 'Lote e Retomada'), keywords: ['lote', 'batch'], run: () => this.batchPipelineModal.open() },
         { id: 'layout', label: t('search.cmd_auto_layout', 'Auto-Organizar Layout'), keywords: ['layout', 'organizar', 'distribuir', 'alinhar'], run: () => this.graph.autoLayout(true) },
-        { id: 'github', label: t('search.cmd_github', 'Bibliotecas (skills, MCPs e templates)'), keywords: ['github', 'repo', 'repositório', 'biblioteca', 'library', 'skill'], run: () => globalEventBus.emit('properties:open', { scope: 'studio', section: 'libraries' }) }
+        { id: 'github', label: t('search.cmd_github', 'Bibliotecas (skills, MCPs e templates)'), keywords: ['github', 'repo', 'repositório', 'biblioteca', 'library', 'skill'], run: () => { void this.openBackstage('library'); } }
       ]);
     }
 
@@ -752,7 +752,9 @@ export class OfficeRibbon {
     });
     this.container.querySelector('#ribbon-btn-mcp-mgr')?.addEventListener('click', () => this.mcpServersModal.show());
     this.container.querySelector('#ribbon-btn-open-templates-tab')?.addEventListener('click', () => this.templateModal.show());
-    this.container.querySelector('#ribbon-btn-github-repos')?.addEventListener('click', () => globalEventBus.emit('properties:open', { scope: 'studio', section: 'libraries' }));
+    this.container.querySelector('#ribbon-btn-github-repos')?.addEventListener('click', () => {
+      void this.openBackstage('library');
+    });
 
     // 9. Botões da Aba Conectores & Importação
     this.container.querySelector('#ribbon-btn-import-pi')?.addEventListener('click', () => this.importPiModal.show());
@@ -1342,7 +1344,7 @@ export class OfficeRibbon {
     return this.backstageView;
   }
 
-  public openBackstage(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' | 'properties' = 'info'): Promise<void> {
+  public openBackstage(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' | 'properties' | 'library' = 'info'): Promise<void> {
     return this.backstageView.open(section);
   }
 

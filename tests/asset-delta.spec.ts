@@ -59,4 +59,28 @@ describe('AssetDelta - diff do aviso de atualização', () => {
 
     expect(diffAgentSettings(base, next)).toEqual(['Modelo', 'Skills']);
   });
+
+  it('detecta alterações de reasoningEffort em model separadamente', () => {
+    const base: INodeAgentSettings = {
+      inheritSandbox: true,
+      inheritModel: false,
+      model: { provider: 'deepseek', model: 'deepseek-flash', reasoningEffort: 'medium' },
+      inheritCodeMode: true
+    };
+
+    expect(diffAgentSettings(base, {
+      ...base,
+      model: { provider: 'deepseek', model: 'deepseek-flash', reasoningEffort: 'high' }
+    })).toEqual(['Esforço de raciocínio']);
+
+    expect(diffAgentSettings(base, {
+      ...base,
+      model: { provider: 'anthropic', model: 'claude-sonnet-4-5', reasoningEffort: 'max' }
+    })).toEqual(['Modelo', 'Esforço de raciocínio']);
+
+    expect(diffAgentSettings(
+      { ...base, model: { provider: 'deepseek', model: 'deepseek-flash' } },
+      base
+    )).toEqual([]);
+  });
 });

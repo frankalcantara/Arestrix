@@ -43,6 +43,9 @@ public:
 
     EditResult addNode(const std::string& type, const std::string& label, std::optional<double> x,
                        std::optional<double> y, const std::string& lambda, rt::RuntimeLang lang);
+    // Insere um vertice ja construido (por exemplo, a partir de um ativo da biblioteca).
+    // Preenche id, posicao e portas padrao quando ausentes e valida o tipo.
+    EditResult addNodeJson(Json node, rt::RuntimeLang lang);
     // Campos aceitos: label, customLambdaBody, parameters, agentSettings, switchSettings, mcpSettings,
     // outputSettings, interactionSettings, callSettings, requiredHeaders, criticalSectionId
     // (objetos sao mesclados no existente).

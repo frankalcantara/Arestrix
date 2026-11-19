@@ -138,8 +138,9 @@ describe('PropertiesData', () => {
     expect(libraries?.content).toContain('Adicionar fonte de repositório');
     expect(libraries?.content).toContain('data-property-input="libraryName"');
     expect(libraries?.content).toContain('data-property-input="repoPath"');
-    expect(libraries?.content.indexOf('properties-library-source-panel'))
-      .toBeLessThan(libraries?.content.indexOf('properties-library-browser') ?? -1);
+    // O navegador de bibliotecas é uma página do Backstage, não um painel embutido.
+    expect(libraries?.content).not.toContain('properties-library-browser');
+    expect(libraries?.content).toContain('properties-open-library-page-studio');
 
     const workspace = buildPropertiesScopeConfig('workspace', context);
     expect(workspace.sections.find(section => section.id === 'libraries')).toBeDefined();

@@ -273,6 +273,8 @@ add_library(arestrix_core STATIC
   ${SRC}/assistant/GraphDocument.cpp
   ${SRC}/assistant/AssistantTools.cpp
   ${SRC}/assistant/AssistantSession.cpp
+  ${SRC}/libraries/LibraryCatalog.cpp
+  ${SRC}/libraries/LibraryMcpServer.cpp
   ${SRC}/rt/Decision.cpp
   ${SRC}/rt/McpTools.cpp
   ${SRC}/rt/NodeInput.cpp
@@ -283,6 +285,7 @@ add_library(arestrix_core STATIC
   ${SRC}/native/NativeData.cpp
   ${SRC}/native/NativeMisc.cpp
   ${SRC}/native/NativeSqlite.cpp
+  ${SRC}/native/NativeLibrary.cpp
   ${TP}/sqlite/sqlite3.c
   ${TP}/simdjson/singleheader/simdjson.cpp
   ${TP}/ed25519/add_scalar.c
@@ -374,7 +377,9 @@ else()
 endif()
 
 find_package(Threads REQUIRED)
-target_compile_definitions(arestrix_core PRIVATE ARESTRIX_MEMORY_VERSION="${ARESTRIX_VERSION}")
+target_compile_definitions(arestrix_core PRIVATE
+  ARESTRIX_MEMORY_VERSION="${ARESTRIX_VERSION}"
+  ARESTRIX_LIBRARY_MCP_VERSION="${ARESTRIX_VERSION}")
 target_link_libraries(arestrix_core PUBLIC arestrix_security_flags Threads::Threads)
 
 # Perfilamento opcional (somente desenvolvimento). O release usa OFF e nao
@@ -454,6 +459,22 @@ add_custom_command(TARGET arestrix-memory POST_BUILD
   VERBATIM)
 
 # ---------------------------------------------------------------------------
+# arestrix-mcp-biblioteca: servidor MCP stdio da Biblioteca de Vertices e Agentes.
+# Processo persistente, catalogo indexado em memoria e auditoria nativa em C++.
+# ---------------------------------------------------------------------------
+add_executable(arestrix-mcp-biblioteca
+  ${SRC}/mcp/BibliotecaServer.cpp)
+target_link_libraries(arestrix-mcp-biblioteca PRIVATE arestrix_core arestrix_security_flags)
+target_compile_definitions(arestrix-mcp-biblioteca PRIVATE
+  ARESTRIX_LIBRARY_MCP_VERSION="${ARESTRIX_VERSION}")
+if(WIN32)
+  arestrix_add_version_info(arestrix-mcp-biblioteca "Arestrix Library MCP" "arestrix-mcp-biblioteca.exe" "arestrix-mcp-biblioteca")
+endif()
+add_custom_command(TARGET arestrix-mcp-biblioteca POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-mcp-biblioteca>" "${CMAKE_SOURCE_DIR}/"
+  VERBATIM)
+
+# ---------------------------------------------------------------------------
 # Studio
 # ---------------------------------------------------------------------------
 if(ARESTRIX_BUILD_STUDIO)
@@ -512,6 +533,10 @@ if(ARESTRIX_BUILD_STUDIO)
 
   add_custom_command(TARGET arestrix POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix>" "${CMAKE_SOURCE_DIR}/"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/CppCore/dist/resources"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/src/core/libraries/catalog/bundledAgentVertices.json"
+            "${CMAKE_SOURCE_DIR}/CppCore/dist/resources/bundledAgentVertices.json"
     VERBATIM)
 endif()
 

@@ -1,4 +1,4 @@
-import type { IMcpServerConfig } from '../../types.ts';
+import type { IAssetOriginMetadata, IMcpServerConfig } from '../../types.ts';
 import type { IWorkspaceApprovedMcp } from '../../workspace/types.ts';
 import type { ILibraryAsset, ILibraryAssetAudit, ILibraryAssetProvenance, LibraryAssetStatus } from '../types.ts';
 import { assetPayloadToMcpConfig, mcpConfigToAssetPayload } from '../types.ts';
@@ -15,6 +15,10 @@ export interface IMcpAssetInput {
   payload: ReturnType<typeof mcpConfigToAssetPayload>;
   audit: ILibraryAssetAudit;
   provenance: ILibraryAssetProvenance;
+  domain?: string;
+  subdomain?: string;
+  bundledInProduct?: boolean;
+  origin?: IAssetOriginMetadata;
   derivedFrom?: ILibraryAsset['derivedFrom'];
 }
 
@@ -31,6 +35,10 @@ export function createMcpAsset(input: IMcpAssetInput): ILibraryAsset {
     name: input.name,
     description: input.description,
     category: input.category,
+    domain: input.domain,
+    subdomain: input.subdomain,
+    bundledInProduct: input.bundledInProduct,
+    origin: input.origin,
     version: input.version,
     license: input.license,
     status: input.status || 'available',

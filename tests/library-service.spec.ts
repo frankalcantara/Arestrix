@@ -101,6 +101,44 @@ describe('LibraryService - importação, derivação e instalação', () => {
     expect(updated.asset?.audit.hash).not.toBe(derived!.audit.hash);
   });
 
+  it('preserva metadados de origem (origin, bundledInProduct, domain, subdomain) ao derivar agente', async () => {
+    const saved = await service.saveTemplateToLibrary({
+      id: 'bundled-reviewer',
+      name: 'Code Reviewer',
+      taskType: 'agent',
+      assetKind: 'agent',
+      description: 'Revisa código',
+      inputs: [{ name: 'in', type: 'flow' }],
+      outputs: [{ name: 'out', type: 'flow' }],
+      lambdaBodyTemplate: '',
+      domain: 'Engenharia de Software',
+      subdomain: 'Code Review',
+      bundledInProduct: true,
+      origin: {
+        bundledInProduct: true,
+        sourceKind: 'builtin',
+        libraryId: 'library-arestrix',
+        assetId: 'bundled-reviewer',
+        templateId: 'bundled-reviewer',
+        repo: 'EveryInc/compound-engineering-plugin',
+        path: 'skills/ce-code-review/SKILL.md',
+        url: 'https://github.com/EveryInc/compound-engineering-plugin',
+        license: 'MIT',
+        canonicalKey: 'code-review',
+        installVersion: '1.0.0',
+        installHash: 'abc123'
+      }
+    }, { scope: 'workspace' });
+
+    expect(saved).not.toBeNull();
+    const derived = await service.deriveAsset(saved!.id);
+    expect(derived).not.toBeNull();
+    expect(derived?.domain).toBe('Engenharia de Software');
+    expect(derived?.subdomain).toBe('Code Review');
+    expect(derived?.bundledInProduct).toBe(true);
+    expect(derived?.origin).toEqual(saved!.origin);
+  });
+
   it('instala uma skill aprovada em .workspace/skills via backend', async () => {
     const writes = new Map<string, string>();
     (globalThis as any).window = {
@@ -349,10 +387,12 @@ describe('LibraryService - importação, derivação e instalação', () => {
 
   it('clona uma biblioteca e mantém vínculo com a origem', async () => {
     const imported = await service.importBuiltinSkills();
+    const expectedCount = registry.listAssets('library-arestrix').length;
     const clone = await service.cloneLibrary('library-arestrix', 'Biblioteca Clonada', 'workspace');
 
     expect(clone).not.toBeNull();
-    expect(clone?.imported.length).toBe(imported.imported.length);
+    expect(clone?.imported.length).toBe(expectedCount);
+    expect(clone?.imported.length).toBeGreaterThanOrEqual(imported.imported.length);
     expect(registry.list('workspace').some(library => library.name === 'Biblioteca Clonada')).toBe(true);
     expect(clone?.imported[0].derivedFrom?.libraryId).toBe('library-arestrix');
   });
@@ -361,7 +401,14 @@ describe('LibraryService - importação, derivação e instalação', () => {
     await service.importBuiltinSkills();
     const exported = service.exportLibrary('library-arestrix');
     expect(exported).toBeTruthy();
-    expect(exported).not.toContain('"env"');
+    const exportedJson = JSON.parse(exported!);
+    for (const asset of exportedJson.assets || []) {
+      if (asset.payload?.kind === 'mcp') {
+        for (const val of Object.values(asset.payload.env || {})) {
+          expect(String(val)).toMatch(/^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/);
+        }
+      }
+    }
 
     const imported = await service.importLibrary(exported!, { scope: 'workspace', name: 'Biblioteca Importada' });
     expect(imported).not.toBeNull();

@@ -1,3 +1,4 @@
+import type { IAssetOriginMetadata } from '../../types.ts';
 import type { ISerializedTemplatePlugin } from '../../templates/AgentTemplateTypes.ts';
 import type {
   IAgentTemplatePayload,
@@ -19,6 +20,10 @@ export interface ITemplateAssetInput {
   payload: IAgentTemplatePayload;
   audit: ILibraryAssetAudit;
   provenance: ILibraryAssetProvenance;
+  domain?: string;
+  subdomain?: string;
+  bundledInProduct?: boolean;
+  origin?: IAssetOriginMetadata;
   derivedFrom?: ILibraryAsset['derivedFrom'];
 }
 
@@ -42,6 +47,10 @@ export function createTemplateAsset(input: ITemplateAssetInput): ILibraryAsset {
     name: input.name,
     description: input.description,
     category: input.category,
+    domain: input.domain,
+    subdomain: input.subdomain,
+    bundledInProduct: input.bundledInProduct,
+    origin: input.origin,
     version: input.version,
     license: input.license,
     status: input.status || 'available',

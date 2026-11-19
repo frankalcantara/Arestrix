@@ -10,6 +10,7 @@
 #include <sstream>
 #include <system_error>
 
+#include "libraries/LibraryCatalog.hpp"
 #include "rt/McpTools.hpp"
 #include "util/Json.hpp"
 
@@ -19,6 +20,7 @@ namespace assistant {
 namespace {
 
 namespace fs = std::filesystem;
+using libraries::LibraryCatalog;
 using rt::langPick;
 using rt::RuntimeLang;
 
@@ -428,7 +430,8 @@ bool storeChild(Json& root, const std::vector<std::string>& path, const Json& ch
 bool scopedTool(const std::string& name) {
     static const std::set<std::string> scoped = {
         "get_graph", "get_node", "validate_graph", "add_node", "update_node", "remove_node",
-        "move_node", "connect", "disconnect", "clear_graph", "attach_skill", "attach_mcp"
+        "move_node", "connect", "disconnect", "clear_graph", "attach_skill", "attach_mcp",
+        "library_add_node"
     };
     return scoped.count(name) > 0;
 }
@@ -436,7 +439,7 @@ bool scopedTool(const std::string& name) {
 bool scopedToolWrites(const std::string& name) {
     static const std::set<std::string> writes = {
         "add_node", "update_node", "remove_node", "move_node", "connect", "disconnect",
-        "clear_graph", "attach_skill", "attach_mcp"
+        "clear_graph", "attach_skill", "attach_mcp", "library_add_node"
     };
     return writes.count(name) > 0;
 }
@@ -657,6 +660,55 @@ std::vector<AssistantToolDef> assistantTools(RuntimeLang lang) {
         object(Json{{"server", prop("string", L("Id do servidor (veja list_mcp_servers).", "Server id (see list_mcp_servers)."))}},
                {"server"}),
         ToolRisk::Read));
+
+    // --- Biblioteca de Vertices e Agentes ---
+    tools.push_back(tool("library_list_assets",
+        L("Lista a Biblioteca de Vertices e Agentes (nativa + Workspace): id, tipo, biblioteca, dominio, "
+          "subdominio, status e veredito. Use os ids com library_get_asset e library_add_node.",
+          "Lists the Arestrix Vertex and Agent Library (native + Workspace): id, kind, library, domain, "
+          "subdomain, status and verdict. Use the ids with library_get_asset and library_add_node."),
+        object(Json{{"library", prop("string", L("Id da biblioteca (opcional).", "Library id (optional)."))},
+                    {"kind", prop("string", L("Tipo: agent-template, pipeline, skill ou mcp (opcional).",
+                                              "Kind: agent-template, pipeline, skill or mcp (optional)."))},
+                    {"domain", prop("string", L("Filtro por dominio (opcional).", "Domain filter (optional)."))},
+                    {"subdomain", prop("string", L("Filtro por subdominio (opcional).", "Subdomain filter (optional)."))},
+                    {"limit", prop("number", L("Maximo de itens (padrao 40, maximo 100).",
+                                               "Maximum items (default 40, max 100)."))},
+                    {"offset", prop("number", L("Deslocamento para paginar (opcional).", "Paging offset (optional)."))}}),
+        ToolRisk::Read));
+    tools.push_back(tool("library_search_assets",
+        L("Busca ativos da biblioteca por nome, descricao, categoria, dominio ou subdominio.",
+          "Searches library assets by name, description, category, domain or subdomain."),
+        object(Json{{"query", prop("string", L("Texto da busca.", "Search text."))},
+                    {"kind", prop("string", L("Tipo de ativo (opcional).", "Asset kind (optional)."))},
+                    {"limit", prop("number", L("Maximo de itens (padrao 40, maximo 100).",
+                                               "Maximum items (default 40, max 100)."))}},
+               {"query"}),
+        ToolRisk::Read));
+    tools.push_back(tool("library_get_asset",
+        L("Le um ativo da biblioteca pelo id: metadados, auditoria, template e configuracao completa do agente.",
+          "Reads a library asset by id: metadata, audit, template and full agent settings."),
+        object(Json{{"id", prop("string", L("Id do ativo (veja library_list_assets).",
+                                            "Asset id (see library_list_assets)."))}},
+               {"id"}),
+        ToolRisk::Read));
+    tools.push_back(tool("library_add_node",
+        L("Cria um vertice no grafo a partir de um ativo da biblioteca. agent-template e pipeline preservam "
+          "portas, parametros e agentSettings; skill cria um vertice agente com a skill anexada. Depois use "
+          "connect para ligar as portas e validate_graph para conferir.",
+          "Creates a graph vertex from a library asset. agent-template and pipeline preserve ports, parameters "
+          "and agentSettings; skill creates an agent vertex with the skill attached. Then use connect to wire "
+          "the ports and validate_graph to check."),
+        object(Json{{"asset_id", prop("string", L("Id do ativo (veja library_list_assets).",
+                                                   "Asset id (see library_list_assets)."))},
+                    {"label", prop("string", L("Rotulo do vertice (opcional; padrao = nome do ativo).",
+                                               "Vertex label (optional; default = asset name)."))},
+                    {"x", prop("number", L("Posicao horizontal (opcional).", "Horizontal position (optional)."))},
+                    {"y", prop("number", L("Posicao vertical (opcional).", "Vertical position (optional)."))},
+                    {"parameters", prop("object", L("Sobrescreve parametros do template (opcional).",
+                                                    "Overrides template parameters (optional)."))}},
+               {"asset_id"}),
+        ToolRisk::Edit));
 
     // --- Editar o grafo (aparece no canvas e pode ser desfeito) ---
     tools.push_back(tool("add_node",
@@ -1129,6 +1181,49 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                 {"content", content}
             }, name, Json{{"path", filePath}});
         }
+        if (name == "library_list_assets" || name == "library_search_assets" ||
+            name == "library_get_asset") {
+            LibraryCatalog catalog;
+            std::string warning;
+            LibraryCatalog::load(projectRootOf(host), catalog, warning);
+
+            if (name == "library_list_assets") {
+                int limit = 0, offset = 0;
+                if (auto n = argNum(args, "limit")) limit = static_cast<int>(*n);
+                if (auto n = argNum(args, "offset")) offset = static_cast<int>(*n);
+                Json result = catalog.list(argStr(args, "library"), argStr(args, "kind"),
+                                           argStr(args, "domain"), argStr(args, "subdomain"),
+                                           limit, offset);
+                if (!warning.empty()) result["warning"] = warning;
+                return okOutcome(result, name,
+                                 Json{{"library", argStr(args, "library")}, {"kind", argStr(args, "kind")}});
+            }
+
+            if (name == "library_search_assets") {
+                const std::string query = argStr(args, "query");
+                if (query.empty()) {
+                    return fail(langPick(lang, "Informe um texto para buscar.",
+                                         "Provide a search text."), name);
+                }
+                int limit = 0;
+                if (auto n = argNum(args, "limit")) limit = static_cast<int>(*n);
+                Json result = catalog.search(query, argStr(args, "kind"), limit);
+                if (!warning.empty()) result["warning"] = warning;
+                return okOutcome(result, name, Json{{"query", query}});
+            }
+
+            const std::string id = argStr(args, "id");
+            auto asset = catalog.detail(id);
+            if (!asset) {
+                return fail(langPick(lang, "Ativo nao encontrado na biblioteca: '",
+                                     "Asset not found in the library: '") + id + "'. " +
+                            langPick(lang, "Use library_list_assets ou library_search_assets.",
+                                     "Use library_list_assets or library_search_assets."), name);
+            }
+            Json result = *asset;
+            if (!warning.empty()) result["warning"] = warning;
+            return okOutcome(result, name, Json{{"name", result.value("name", id)}});
+        }
         if (name == "list_skills") {
             return okOutcome(Json{{"skills", listWorkspaceSkills(projectRootOf(host))}}, name, Json::object());
         }
@@ -1345,6 +1440,52 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
             if (!r.ok) return fail(r.error, name);
             ToolOutcome o = okOutcome(Json{{"node", nodeId}, {"server", server}, {"tool", tool.empty() ? "*" : tool}}, name,
                                       Json{{"label", node->value("label", nodeId)}, {"server", server}});
+            if (!r.uiOp.is_null()) o.uiOps.push_back(r.uiOp);
+            return o;
+        }
+
+        if (name == "library_add_node") {
+            const std::string assetId = argStr(args, "asset_id");
+            if (assetId.empty()) {
+                return fail(langPick(lang, "Informe o asset_id do ativo da biblioteca.",
+                                     "Provide the library asset_id."), name);
+            }
+            LibraryCatalog catalog;
+            std::string warning;
+            LibraryCatalog::load(projectRootOf(host), catalog, warning);
+            const Json* asset = catalog.find(assetId);
+            if (!asset) {
+                return fail(langPick(lang, "Ativo nao encontrado na biblioteca: '",
+                                     "Asset not found in the library: '") + assetId + "'. " +
+                            langPick(lang, "Use library_list_assets ou library_search_assets.",
+                                     "Use library_list_assets or library_search_assets."), name);
+            }
+
+            Json node;
+            std::string error;
+            if (!catalog.buildNodeFromAsset(*asset, argStr(args, "label"), argObj(args, "parameters"),
+                                            lang, node, error)) {
+                return fail(error, name);
+            }
+            // Com x e y, respeita a posicao; sem ambos, GraphDocument posiciona
+            // a direita do ultimo vertice.
+            std::optional<double> x = argNum(args, "x");
+            std::optional<double> y = argNum(args, "y");
+            if (x && y) node["position"] = Json{{"x", *x}, {"y", *y}, {"z", 0}};
+
+            auto r = doc.addNodeJson(node, lang);
+            if (!r.ok) return fail(r.error, name);
+            const std::string nodeId = r.result.value("id", std::string());
+            ToolOutcome o = okOutcome(
+                Json{{"node_id", nodeId},
+                     {"type", r.result.value("type", std::string())},
+                     {"label", r.result.value("label", std::string())},
+                     {"asset_id", assetId},
+                     {"ports", Json{{"inputs", r.result.value("inputs", Json::array())},
+                                    {"outputs", r.result.value("outputs", Json::array())}}},
+                     {"next", langPick(lang, "Use connect para ligar as portas e validate_graph para conferir.",
+                                       "Use connect to wire the ports and validate_graph to check.")}},
+                name, Json{{"label", r.result.value("label", std::string())}, {"asset", assetId}});
             if (!r.uiOp.is_null()) o.uiOps.push_back(r.uiOp);
             return o;
         }

@@ -71,7 +71,8 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       ];
       const html = (backstage as any).renderSectionContent(projectManager.getCurrentProject(), recents);
 
-      expect(html).toContain('Ações Rápidas de Manutenção');
+      expect(html).toContain('backstage-cards-grid');
+      expect(html).toContain('Manutenção Rápida');
       expect(html).toContain('Projetos Recentes');
       expect(html).toContain('Proj Alpha');
       expect(html).toContain('recent-project-action-select');
@@ -80,14 +81,15 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       expect(html).toContain('Gerenciar');
       expect(html).toContain('Apagar Projeto...');
 
-      const manutencaoIdx = html.indexOf('Ações Rápidas de Manutenção');
+      const cardsIdx = html.indexOf('backstage-cards-grid');
       const recentsIdx = html.indexOf('Projetos Recentes');
-      expect(recentsIdx).toBeGreaterThan(manutencaoIdx);
+      expect(recentsIdx).toBeGreaterThan(cardsIdx);
     });
 
     it('deve formatar o ID do projeto e o Diretório Físico na tela Informações com estilos anti-overflow (word-break e overflow-wrap)', () => {
       const backstage = new BackstageView(graph, {} as any, {} as any);
       (backstage as any).activeSection = 'info';
+      (backstage as any).infoDropdownOpen = true;
       const cur = {
         ...projectManager.getCurrentProject(),
         projectId: 'proj_hash_super_longo_que_nao_deve_vazar_do_card_de_informacoes_1234567890',

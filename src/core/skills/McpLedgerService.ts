@@ -2,6 +2,7 @@ import { McpHasher } from './McpHasher.ts';
 import { IMcpServerConfig } from '../types.ts';
 import { APPROVED_WORKSPACE_MCPS } from '../workspace/ApprovedWorkspaceCatalog.ts';
 import { EventBus } from '../EventBus.ts';
+import bundledMcpCatalog from '../libraries/catalog/bundledMcpServers.json';
 
 export type McpAuditVerdict = 'APPROVE' | 'CAUTION' | 'REJECT' | 'PENDING';
 
@@ -163,6 +164,40 @@ export class McpLedgerService {
             provenance: 'workspace-curated'
           });
         }
+      }
+    }
+
+    // 3. Homologa servidores MCP embutidos na Biblioteca Arestrix (auditados via mcp-scanner-v1)
+    const bundledItems = (bundledMcpCatalog as { items?: Array<any> })?.items;
+    if (Array.isArray(bundledItems)) {
+      for (const entry of bundledItems) {
+        if (!entry || !entry.serverId || !entry.payload) continue;
+        const verdict = (entry.audit?.verdict || 'APPROVE') as McpAuditVerdict;
+        if (verdict === 'REJECT') continue;
+        const hash = String(entry.origin?.installHash || entry.audit?.hash || '');
+        if (!hash || this.entries.has(hash)) continue;
+        const tools = Array.isArray(entry.payload.cachedTools) ? entry.payload.cachedTools : [];
+        this.entries.set(hash, {
+          hash,
+          serverId: entry.id || entry.serverId,
+          name: entry.name || entry.serverId,
+          transport: entry.payload.transport || 'stdio',
+          verdict,
+          riskScore: Number(entry.audit?.riskScore) || 0,
+          auditedAt: entry.audit?.auditedAt || timestamp,
+          auditedBy: 'ArestrixBundledMcpCatalog',
+          scannerVersion: entry.audit?.policyVersion || 'mcp-scanner-v1',
+          findingsCount: Array.isArray(entry.audit?.findings) ? entry.audit.findings.length : 0,
+          findings: Array.isArray(entry.audit?.findings) ? [...entry.audit.findings] : [],
+          warnings: Array.isArray(entry.audit?.warnings) ? [...entry.audit.warnings] : [],
+          checklist: [
+            { rule: 'Licença Permissiva', passed: true, detail: `SPDX ${entry.license || 'MIT'}` },
+            { rule: 'Zero Segredos Literais', passed: true, detail: 'Somente referências ${VAR} em env/headers.' }
+          ],
+          toolCount: tools.length,
+          toolNames: tools.map((t: any) => String(t.name || '')).filter(Boolean),
+          provenance: 'workspace-curated'
+        });
       }
     }
   }

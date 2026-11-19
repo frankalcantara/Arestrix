@@ -14,7 +14,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node -e \"const fs=require('fs'); fs.cpSync('dist', 'CppCore/dist', {recursive:true});\"",
+    "build": "tsc && vite build && node -e \"const fs=require('fs');fs.mkdirSync('dist/resources',{recursive:true});fs.copyFileSync('src/core/libraries/catalog/bundledAgentVertices.json','dist/resources/bundledAgentVertices.json');fs.copyFileSync('src/core/libraries/catalog/bundledMcpServers.json','dist/resources/bundledMcpServers.json');fs.cpSync('dist','CppCore/dist',{recursive:true});\"",
     "preview": "vite preview",
     "test": "vitest run",
     "test:libraries": "node scripts/test-libraries.mjs",

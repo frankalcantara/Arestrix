@@ -1,4 +1,5 @@
 import { WorkspaceManager } from '../workspace/WorkspaceManager.ts';
+import { compactLibraryStateForStorage } from './BuiltinLibraryCatalog.ts';
 import type { ILibraryState, LibraryScope } from './types.ts';
 
 /**
@@ -47,14 +48,15 @@ export class LibraryStore {
   }
 
   public async save(scope: LibraryScope, state: ILibraryState, projectId = 'default'): Promise<boolean> {
+    const compacted = compactLibraryStateForStorage(state);
     if (scope === 'workspace') {
-      let localOk = this.writeLocal(LibraryStore.WORKSPACE_KEY, state);
+      let localOk = this.writeLocal(LibraryStore.WORKSPACE_KEY, compacted);
       const backend = this.backend();
       if (!backend) return localOk;
       try {
         const response = await backend.call('write_workspace_asset', JSON.stringify({
           filePath: this.workspacePath(),
-          content: JSON.stringify(state, null, 2)
+          content: JSON.stringify(compacted, null, 2)
         }));
         return response === true || response === 'true' || localOk;
       } catch {
@@ -65,7 +67,7 @@ export class LibraryStore {
     const key = scope === 'studio'
       ? LibraryStore.STUDIO_KEY
       : `${LibraryStore.PROJECT_PREFIX}${projectId}`;
-    return this.writeLocal(key, state);
+    return this.writeLocal(key, compacted);
   }
 
   public clear(scope: LibraryScope = 'workspace', projectId = 'default'): void {

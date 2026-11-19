@@ -81,6 +81,7 @@ Server makeDataServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 Server makeTimeServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 Server makeGitServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 Server makeSqliteServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
+Server makeLibraryServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 
 // Exposto para teste: devolve "" se a URL puder ser requisitada neste projeto, ou o motivo da recusa.
 namespace http {

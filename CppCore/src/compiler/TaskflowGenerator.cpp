@@ -491,6 +491,7 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     spec["provider"] = model.value("provider", "deepseek");
     spec["model"] = model.value("model", "");
     if (model.contains("temperature") && model["temperature"].is_number()) spec["temperature"] = model["temperature"];
+    spec["reasoningEffort"] = model.value("reasoningEffort", "");
     spec["promptTemplate"] = model.value("promptTemplate", "");
 
     std::string skillPath = model.value("skillPath", "");

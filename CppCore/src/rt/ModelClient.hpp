@@ -65,6 +65,7 @@ struct ChatRequest {
     int maxTokens = 8192;
     bool hasTemperature = false;
     double temperature = 0.0;
+    std::string reasoningEffort;
     int httpAttempts = 6;
     bool includeReasoning = true;   // false depois que o servidor recusou reasoning_content no historico
     std::string telemetryId;   // vazio = sem telemetria de retentativas

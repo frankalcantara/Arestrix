@@ -1121,6 +1121,35 @@
   justify-content: center;
 }
 
+/* Página Biblioteca de Ativos (Backstage): reutiliza o navegador de bibliotecas
+   das Propriedades, mas como página inteira, sem janela modal. */
+.backstage-library-container {
+  margin-top: 8px;
+  padding-bottom: 32px;
+}
+
+.backstage-library-container .properties-library-browser {
+  min-height: 540px;
+  height: calc(100vh - 210px);
+}
+
+/* Na página inteira a árvore da ontologia cresce com o painel e rola sozinha. */
+.backstage-library-container .properties-library-tree {
+  flex: 1;
+  max-height: none;
+}
+
+@media (max-width: 980px) {
+  .backstage-library-container .properties-library-browser {
+    height: auto;
+    min-height: 0;
+  }
+
+  .backstage-library-container .properties-library-tree {
+    max-height: 420px;
+  }
+}
+
 .backstage-mru-table {
   width: 100%;
   border-collapse: collapse;

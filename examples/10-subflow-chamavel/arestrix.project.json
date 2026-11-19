@@ -10,7 +10,6 @@
   "git": {
     "autoCommitOnRun": true,
     "autoCommitOnShutdown": true,
-    "backupMode": "ddl_and_data",
     "enabled": false,
     "isPrivate": true,
     "lastCommitHash": "",
@@ -31,19 +30,20 @@
       ],
       "customScripts": []
     },
+    "compression": {},
     "memory": {
       "allowedKeys": [],
       "contextBudgetTokens": 800,
       "domains": [],
       "enabled": true,
       "gate": {
-        "mode": "enforce",
-        "provider": "jev",
-        "model": "jev-latest",
+        "fallback": "brief",
+        "maxBriefChars": 1200,
         "maxSearches": 2,
         "minConfidence": 0.6,
-        "fallback": "brief",
-        "maxBriefChars": 1200
+        "mode": "enforce",
+        "model": "jev-latest",
+        "provider": "jev"
       },
       "mode": "consult",
       "persistent": false,
@@ -59,6 +59,7 @@
       "provider": "deepseek",
       "skillPath": ""
     },
+    "routing": {},
     "sandbox": {
       "isolationLevel": "host_direct",
       "maxMemoryMB": 512,
@@ -69,6 +70,7 @@
     }
   },
   "name": "Exemplo 10 - Subflow Chamável",
+  "outputDir": "Output",
   "pipelines": [
     {
       "description": "Coordenador chama um subflow nativo",
@@ -121,6 +123,6 @@
     },
     "version": "1.0.0"
   },
-  "updatedAt": "2026-10-26T00:10:46Z",
+  "updatedAt": "2026-11-19T01:06:32Z",
   "version": "1.0.0"
 }

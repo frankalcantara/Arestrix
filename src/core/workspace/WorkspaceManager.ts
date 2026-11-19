@@ -191,9 +191,15 @@ export class WorkspaceManager {
 
         // 2. Grava configurações de MCPs (env sanitizado: somente referencias ${NOME} chegam ao disco)
         for (const mcp of this.getApprovedMcps()) {
-          const safeMcp: any = mcp && (mcp as any).env
-            ? { ...mcp, env: sanitizeEnvReferences((mcp as any).env) }
-            : mcp;
+          const safeMcp: any = {
+            ...mcp,
+            ...(mcp && (mcp as any).env ? { env: sanitizeEnvReferences((mcp as any).env) } : {})
+          };
+          // O servidor MCP da biblioteca precisa da raiz do projeto ativo para
+          // ler/gravar .workspace/libraries.json; o processo herda o cwd do app.
+          if (mcp.id === 'arestrix-biblioteca') {
+            safeMcp.args = ['--root', this.getWorkspaceRoot()];
+          }
           await glob.webui.call('write_workspace_asset', JSON.stringify({
             filePath: `${targetDirs.mcps}/${mcp.id}.json`,
             content: JSON.stringify(safeMcp, null, 2)

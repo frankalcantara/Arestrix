@@ -199,6 +199,7 @@ default AI (File → Properties → Studio → Studio model) that helps you **op
 - It configures every vertex kind, including human **Interaction** forms, **Call** vertices with `call` edges, and **Output** deliverables.
 - It edits nested **subflow/module** graphs through `parent_path` (the chain of subflow/module ids), with the same add/connect/update/validate tools and a single undo step.
 - It lists approved workspace **skills**, attaches them to agent vertices, and discovers **MCP** servers and tools. `attach_mcp` only accepts servers approved in the Studio governance ledger; it refuses rejected or unaudited servers.
+- It browses the **Vertex and Agent Library** with `library_list_assets` and `library_search_assets`, inspects an item with `library_get_asset`, and creates the graph vertex with `library_add_node`. The vertex keeps the asset's ports, parameters, `agentSettings` and audit provenance; a library skill becomes an agent vertex with the skill already attached.
 - It saves the project, runs the pipeline and inspects the generated artifacts. Assistant-initiated runs go through the Studio validator (topology plus the skills/MCP governance ledger) before the pipeline starts.
 - It can change the project **name, version, description and output folder** after confirmation; the project folder, secrets and the environment stay out of its reach.
 

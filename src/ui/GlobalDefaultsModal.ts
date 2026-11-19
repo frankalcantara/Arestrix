@@ -1,6 +1,6 @@
 import { Graph } from '../core/Graph.ts';
 import { globalEventBus } from '../core/EventBus.ts';
-import { IGlobalPipelineDefaults, LLMProvider, SandboxIsolationLevel, SandboxNetworkPolicy, CodeModeTool, DEFAULT_PIPELINE_DEFAULTS, type VertexMemoryMode } from '../core/types.ts';
+import { IGlobalPipelineDefaults, LLMProvider, ReasoningEffortLevel, SandboxIsolationLevel, SandboxNetworkPolicy, CodeModeTool, DEFAULT_PIPELINE_DEFAULTS, type VertexMemoryMode } from '../core/types.ts';
 import { EMBEDDING_PROFILES, memoryModeOf } from '../core/memory/MemoryConfig.ts';
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 import { EnvironmentManager } from '../core/env/EnvironmentManager.ts';
@@ -111,6 +111,20 @@ export class GlobalDefaultsModal {
                 <div class="form-group">
                   <label class="form-label" for="def-model">${t('global_defaults.model_name_label')}</label>
                   <input type="text" id="def-model" class="form-input" value="${this.escapeHtml(defaults.model.model)}" placeholder="ex: deepseek-flash, claude-opus-5.5" />
+                </div>
+              </div>
+
+              <div class="form-row-grid" style="margin-top: 10px;">
+                <div class="form-group">
+                  <label class="form-label" for="def-reasoning-effort">${t('global_defaults.reasoning_effort_label', 'Esforço de Raciocínio (Reasoning Effort)')}</label>
+                  <select id="def-reasoning-effort" class="form-select">
+                    <option value="none" ${(defaults.model.reasoningEffort || 'medium') === 'none' ? 'selected' : ''}>${t('node_modals.reasoning_none', 'Nenhum (none)')}</option>
+                    <option value="low" ${(defaults.model.reasoningEffort || 'medium') === 'low' ? 'selected' : ''}>${t('node_modals.reasoning_low', 'Baixo (low)')}</option>
+                    <option value="medium" ${(defaults.model.reasoningEffort || 'medium') === 'medium' ? 'selected' : ''}>${t('node_modals.reasoning_medium', 'Médio (medium)')}</option>
+                    <option value="high" ${(defaults.model.reasoningEffort || 'medium') === 'high' ? 'selected' : ''}>${t('node_modals.reasoning_high', 'Alto (high)')}</option>
+                    <option value="max" ${(defaults.model.reasoningEffort || 'medium') === 'max' ? 'selected' : ''}>${t('node_modals.reasoning_max', 'Máximo (max)')}</option>
+                  </select>
+                  <div class="form-hint">${t('global_defaults.reasoning_effort_hint', 'Nível padrão de raciocínio herdado pelos agentes do projeto.')}</div>
                 </div>
               </div>
 
@@ -788,9 +802,10 @@ export class GlobalDefaultsModal {
       });
     });
 
-    // Abrir repositórios do GitHub
+    // Abrir a página de biblioteca de ativos (Backstage), não uma janela modal
     this.overlay.querySelector('#btn-defaults-open-github-repos')?.addEventListener('click', () => {
-      globalEventBus.emit('properties:open', { scope: 'studio', section: 'libraries' });
+      this.hide();
+      globalEventBus.emit('backstage:open', { section: 'library' });
     });
 
     // Toggle estilo das pílulas de ferramentas
@@ -1654,6 +1669,7 @@ export class GlobalDefaultsModal {
   private async saveValues(): Promise<void> {
     const provider = (this.overlay.querySelector('#def-provider') as HTMLSelectElement)?.value as LLMProvider || 'deepseek';
     const model = (this.overlay.querySelector('#def-model') as HTMLInputElement)?.value.trim() || 'deepseek-flash';
+    const reasoningEffort = ((this.overlay.querySelector('#def-reasoning-effort') as HTMLSelectElement)?.value || 'medium') as ReasoningEffortLevel;
     const skillPath = (this.overlay.querySelector('#def-skill') as HTMLInputElement)?.value.trim();
     const promptTemplate = (this.overlay.querySelector('#def-prompt') as HTMLTextAreaElement)?.value.trim();
 
@@ -1763,6 +1779,7 @@ export class GlobalDefaultsModal {
       model: {
         provider,
         model,
+        reasoningEffort,
         skillPath,
         promptTemplate
       },

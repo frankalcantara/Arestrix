@@ -1,6 +1,6 @@
 import { BaseModal } from './BaseModal.ts';
 import { Graph } from '../../core/Graph.ts';
-import { INodeData, IModelConfig, LLMProvider } from '../../core/types.ts';
+import { INodeData, IModelConfig, LLMProvider, ReasoningEffortLevel } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { SkillEditorModal } from './SkillEditorModal.ts';
 import { t } from '../../i18n/index.ts';
@@ -158,10 +158,19 @@ export class NodeModelModal extends BaseModal {
 
             <!-- ABA 3: Parâmetros Cognitivos -->
             <div class="tab-pane" id="pane-tab-parameters" style="${this.activeTab === 'parameters' ? '' : 'display: none;'}">
-              <div class="form-group">
-                <label class="form-label" for="node-temperature">${t('node_modals.temperature_label')}</label>
-                <input type="number" id="node-temperature" class="form-input" min="0" max="1" step="0.05" value="${effectiveModel.temperature ?? 0.7}" ${isInherited ? 'disabled' : ''} />
-                <div class="form-hint">${t('node_modals.temperature_hint', 'Valores menores geram respostas determinísticas; valores maiores geram respostas mais criativas.')}</div>
+              <div class="form-row-grid">
+                <div class="form-group">
+                  <label class="form-label" for="node-temperature">${t('node_modals.temperature_label')}</label>
+                  <input type="number" id="node-temperature" class="form-input" min="0" max="1" step="0.05" value="${effectiveModel.temperature ?? 0.7}" ${isInherited ? 'disabled' : ''} />
+                  <div class="form-hint">${t('node_modals.temperature_hint', 'Valores menores geram respostas determinísticas; valores maiores geram respostas mais criativas.')}</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="node-reasoning-effort">${t('node_modals.reasoning_effort_label', 'Esforço de Raciocínio (Reasoning Effort)')}</label>
+                  <select id="node-reasoning-effort" class="form-select" ${isInherited ? 'disabled' : ''}>
+                    ${this.renderReasoningEffortOptions(effectiveModel.reasoningEffort)}
+                  </select>
+                  <div class="form-hint">${t('node_modals.reasoning_effort_hint', 'Controla a profundidade de raciocínio do modelo quando suportado pelo provedor.')}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -391,7 +400,9 @@ export class NodeModelModal extends BaseModal {
       const model = (this.dialog.querySelector('#node-model-name') as HTMLInputElement)?.value.trim() || 'deepseek-flash';
       const skillPath = (this.dialog.querySelector('#node-skill-path') as HTMLInputElement)?.value.trim();
       const promptTemplate = (this.dialog.querySelector('#node-prompt-template') as HTMLTextAreaElement)?.value.trim();
-      const temperature = parseFloat((this.dialog.querySelector('#node-temperature') as HTMLInputElement)?.value) || 0.7;
+      const parsedTemp = parseFloat((this.dialog.querySelector('#node-temperature') as HTMLInputElement)?.value);
+      const temperature = Number.isFinite(parsedTemp) ? parsedTemp : 0.7;
+      const reasoningEffort = ((this.dialog.querySelector('#node-reasoning-effort') as HTMLSelectElement)?.value || 'medium') as ReasoningEffortLevel;
 
       // O endpoint do servidor local/Jev é global desta máquina; grava antes de fechar para que a
       // execução do pipeline já encontre o valor.
@@ -413,6 +424,7 @@ export class NodeModelModal extends BaseModal {
       newModelData = {
         provider,
         model,
+        reasoningEffort,
         skillPath,
         promptTemplate,
         temperature
@@ -433,6 +445,20 @@ export class NodeModelModal extends BaseModal {
       t('node_modals.cmd_change_model', { label: node.label })
     );
     this.graph.commandManager.execute(cmd);
+  }
+
+  private renderReasoningEffortOptions(selected?: ReasoningEffortLevel): string {
+    const current = selected || 'medium';
+    const levels: Array<[ReasoningEffortLevel, string]> = [
+      ['none', t('node_modals.reasoning_none', 'Nenhum (none)')],
+      ['low', t('node_modals.reasoning_low', 'Baixo (low)')],
+      ['medium', t('node_modals.reasoning_medium', 'Médio (medium)')],
+      ['high', t('node_modals.reasoning_high', 'Alto (high)')],
+      ['max', t('node_modals.reasoning_max', 'Máximo (max)')]
+    ];
+    return levels
+      .map(([value, label]) => `<option value="${value}" ${current === value ? 'selected' : ''}>${this.escapeHtml(label)}</option>`)
+      .join('');
   }
 
   private getProviderLabel(provider: LLMProvider): string {

@@ -278,8 +278,21 @@ ChatMessage ChatMessage::fromJson(const Json& j) {
 Json buildRequestBody(const ProviderInfo& info, const ChatRequest& req, bool includeReasoning) {
     Json body = Json::object();
     body["model"] = req.model;
+    const std::string effort = lower(req.reasoningEffort);
+    bool anthropicThinking = false;
     if (info.protocol == "anthropic") {
-        body["max_tokens"] = req.maxTokens;
+        int maxTokens = req.maxTokens;
+        int budgetTokens = 0;
+        if (effort == "low") budgetTokens = 2048;
+        else if (effort == "medium") budgetTokens = 8192;
+        else if (effort == "high") budgetTokens = 16384;
+        else if (effort == "max") budgetTokens = 32768;
+        if (budgetTokens > 0) {
+            anthropicThinking = true;
+            if (maxTokens <= budgetTokens) maxTokens = budgetTokens + 4096;
+            body["thinking"] = Json{{"type", "enabled"}, {"budget_tokens", budgetTokens}};
+        }
+        body["max_tokens"] = maxTokens;
         if (req.promptCache && !req.systemCacheable.empty()) {
             // Skill + brief sao o prefixo estavel reenviado a cada turno. O
             // contexto de execucao fica fora do bloco cacheado.
@@ -304,6 +317,12 @@ Json buildRequestBody(const ProviderInfo& info, const ChatRequest& req, bool inc
         }
     } else {
         body["messages"] = openAiMessages(req, includeReasoning);
+        if (!effort.empty() && effort != "none") {
+            std::string mapped;
+            if (effort == "low" || effort == "medium" || effort == "high") mapped = effort;
+            else if (effort == "max") mapped = "high";
+            if (!mapped.empty()) body["reasoning_effort"] = mapped;
+        }
         if (!req.tools.empty()) {
             Json tools = Json::array();
             for (const auto& t : req.tools) {
@@ -313,7 +332,7 @@ Json buildRequestBody(const ProviderInfo& info, const ChatRequest& req, bool inc
             body["tools"] = tools;
         }
     }
-    if (req.hasTemperature) body["temperature"] = req.temperature;
+    if (req.hasTemperature && !anthropicThinking) body["temperature"] = req.temperature;
     return body;
 }
 

@@ -81,4 +81,22 @@ describe('SettingsResolver', () => {
     expect(result.memory.origin).toBe('default');
     expect(result.memory.value).toBeDefined();
   });
+
+  it('defaults reasoningEffort to medium and allows vertex override when inheritModel is off', () => {
+    const base = new SettingsResolver().resolve({ studio: studio(), workspace: workspace(), project: project() });
+    expect(base.model.value.reasoningEffort).toBe('medium');
+
+    const inherited = new SettingsResolver().resolveForVertex(
+      { studio: studio(), workspace: workspace(), project: project() },
+      { inheritModel: true, model: { reasoningEffort: 'high' } } as any
+    );
+    expect(inherited.model.value.reasoningEffort).toBe('medium');
+
+    const overridden = new SettingsResolver().resolveForVertex(
+      { studio: studio(), workspace: workspace(), project: project() },
+      { inheritModel: false, model: { reasoningEffort: 'high' } } as any
+    );
+    expect(overridden.model.value.reasoningEffort).toBe('high');
+    expect(overridden.model.origin).toBe('vertex');
+  });
 });

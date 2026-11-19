@@ -330,6 +330,89 @@ EditResult GraphDocument::addNode(const std::string& type, const std::string& la
     return r;
 }
 
+EditResult GraphDocument::addNodeJson(Json node, RuntimeLang lang) {
+    EditResult r;
+    if (!node.is_object()) {
+        r.error = langPick(lang, "Vertice invalido.", "Invalid vertex.");
+        return r;
+    }
+
+    const std::string type = node.value("type", std::string());
+    if (!isKnownNodeType(type)) {
+        r.error = langPick(lang, "Tipo de vertice desconhecido: '", "Unknown vertex type: '") + type + "'.";
+        return r;
+    }
+
+    std::string id = node.value("id", std::string());
+    if (id.empty()) {
+        id = newId("node");
+    } else if (findNodeConst(id)) {
+        r.error = langPick(lang, "Id de vertice ja existe: '", "Vertex id already exists: '") + id + "'.";
+        return r;
+    }
+
+    std::string label = node.value("label", std::string());
+    if (label.empty()) label = type;
+
+    double px = 0, py = 0;
+    bool first = true;
+    for (const auto& existing : schema_.at("nodes")) {
+        if (!existing.contains("position")) continue;
+        double nx = existing.at("position").value("x", 0.0);
+        if (first || nx > px) { px = nx; py = existing.at("position").value("y", 0.0); first = false; }
+    }
+
+    Json defaults = buildNode(id, label, type, first ? 0.0 : px + 300.0, py);
+    if (!node.contains("position") || !node.at("position").is_object()) {
+        node["position"] = defaults.at("position");
+    } else {
+        if (!node.at("position").contains("z")) node["position"]["z"] = 0;
+    }
+
+    for (const char* list : {"inputs", "outputs"}) {
+        if (!node.contains(list) || !node.at(list).is_array() || node.at(list).empty()) {
+            node[list] = defaults.at(list);
+            continue;
+        }
+        const bool isInput = std::string(list) == "inputs";
+        int index = 0;
+        for (auto& portValue : node[list]) {
+            if (!portValue.is_object()) portValue = Json::object();
+            if (portValue.value("id", std::string()).empty()) {
+                portValue["id"] = id + (isInput ? "_in_" : "_out_") + std::to_string(index);
+            }
+            if (portValue.value("type", std::string()).empty()) portValue["type"] = "flow";
+            portValue["direction"] = isInput ? "input" : "output";
+            ++index;
+        }
+    }
+
+    if (!node.contains("parameters") || !node.at("parameters").is_object()) {
+        node["parameters"] = Json::object();
+    }
+    if (!node.contains("customLambdaBody") || !node.at("customLambdaBody").is_string()) {
+        node["customLambdaBody"] = defaults.at("customLambdaBody");
+    }
+    if (type == "agent" && (!node.contains("agentSettings") || !node.at("agentSettings").is_object())) {
+        node["agentSettings"] = defaults.at("agentSettings");
+    }
+
+    node["id"] = id;
+    node["label"] = label;
+    node["type"] = type;
+    schema_["nodes"].push_back(node);
+
+    r.ok = true;
+    r.result = Json{{"id", id},
+                    {"type", type},
+                    {"label", label},
+                    {"position", node.at("position")},
+                    {"inputs", portList(node, "inputs")},
+                    {"outputs", portList(node, "outputs")}};
+    r.uiOp = Json{{"op", "add_node"}, {"node", node}};
+    return r;
+}
+
 EditResult GraphDocument::updateNode(const std::string& id, const Json& patch, RuntimeLang lang) {
     EditResult r;
     Json* n = findNode(id);

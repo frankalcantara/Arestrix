@@ -199,6 +199,7 @@ Studio (Arquivo → Propriedades → Studio → Modelo do Studio) que ajuda a **
 - Configura todos os tipos de vértice, incluindo formulários de **Interação** humana, vértices **Call** com arestas de chamada e entregáveis **Output**.
 - Edita grafos aninhados de **subflow/module** por `parent_path` (a cadeia de ids de subflow/module), com as mesmas ferramentas de adicionar/ligar/alterar/validar e um único passo de desfazer.
 - Lista as **skills** aprovadas do workspace, anexa skills a agentes e descobre servidores e ferramentas **MCP**. O `attach_mcp` só aceita servidores aprovados no ledger de governança do Studio; recusa servidores rejeitados ou ainda não auditados.
+- Consulta a **Biblioteca de Vértices e Agentes** com `library_list_assets` e `library_search_assets`, inspeciona um item com `library_get_asset` e cria o vértice no grafo com `library_add_node`. O vértice preserva portas, parâmetros, `agentSettings` e a proveniência da auditoria do ativo; uma skill da biblioteca vira um vértice agente com a skill já anexada.
 - Salva o projeto, executa o pipeline e inspeciona os artefatos gerados. A execução iniciada pelo Assistente passa pelo validador do Studio (topologia + ledger de governança de skills/MCP) antes de começar.
 - Altera **nome, versão, descrição e pasta de saída** do projeto após confirmação; a pasta do projeto, segredos e ambiente ficam fora do alcance dele.
 
