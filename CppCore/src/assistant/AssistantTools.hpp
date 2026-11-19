@@ -91,6 +91,25 @@ public:
         error = "unpromoteMemoryPlaybook nao implementado";
         return false;
     }
+
+    // Configura uma variavel de ambiente NAO-SECRETA (ex.: AWS_REGION, ARESTRIX_DEFAULT_PROVIDER).
+    // Segredos (API keys/tokens/senhas) sao bloqueados antes de chamar este metodo.
+    virtual bool setNonSecretEnv(const std::string& key, const std::string& value, std::string& error) {
+        (void)key;
+        (void)value;
+        error = "setNonSecretEnv nao implementado";
+        return false;
+    }
+
+    // Compila o projeto (mode='check') ou compila e exporta o executavel standalone (mode='standalone').
+    virtual Json compileProject(const Json& schema, bool exportStandalone, const Json& runnerPatch,
+                                std::string& error) {
+        (void)schema;
+        (void)exportStandalone;
+        (void)runnerPatch;
+        error = "compileProject nao implementado";
+        return Json::object();
+    }
 };
 
 struct ToolOutcome {

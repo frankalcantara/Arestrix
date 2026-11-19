@@ -43,7 +43,16 @@ type ChatItem =
   | { kind: 'cancelled' }
   | { kind: 'confirm'; tool: string; params: Record<string, any>; answer?: boolean };
 
-const CONFIRM_TOOLS = ['create_project', 'open_project', 'update_project', 'clear_graph', 'save_project', 'run_pipeline'];
+const CONFIRM_TOOLS = [
+  'create_project',
+  'open_project',
+  'update_project',
+  'clear_graph',
+  'save_project',
+  'run_pipeline',
+  'configure_environment',
+  'compile_project'
+];
 
 /**
  * Aba "Assistente" do painel lateral. Só interface: o laço da conversa, as ferramentas, a validação,

@@ -397,7 +397,7 @@ RunnerExportResult RunnerService::exportRunner(
 
     if (!fs::exists(finalExePath, ec)) {
         build::BuildEvents ev;
-        auto br = build::buildAndRun(graph, projectRoot, ev);
+        auto br = build::buildOnly(graph, projectRoot, ev);
         if (br.success && fs::exists(builtExe, ec)) {
             fs::copy_file(builtExe, finalExePath, fs::copy_options::overwrite_existing, ec);
         }

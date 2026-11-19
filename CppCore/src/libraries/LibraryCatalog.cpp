@@ -6,7 +6,9 @@
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <map>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <system_error>
 #include <unordered_map>
@@ -912,6 +914,78 @@ bool LibraryCatalog::rebuildFromWorkspace(std::string& warning) {
     return true;
 }
 
+std::vector<std::string> splitSearchTokens(const std::string& text) {
+    std::vector<std::string> tokens;
+    std::string current;
+    for (char ch : lower(text)) {
+        if (std::isspace(static_cast<unsigned char>(ch))) {
+            if (!current.empty()) {
+                tokens.push_back(current);
+                current.clear();
+            }
+        } else {
+            current.push_back(ch);
+        }
+    }
+    if (!current.empty()) tokens.push_back(current);
+    return tokens;
+}
+
+void collectEnvVarRefsFromString(const std::string& text, std::set<std::string>& out) {
+    static const std::regex kRefRe(R"(\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-[^}]*)?\})");
+    auto begin = std::sregex_iterator(text.begin(), text.end(), kRefRe);
+    auto end = std::sregex_iterator();
+    for (auto it = begin; it != end; ++it) {
+        if (it->size() >= 2) out.insert((*it)[1].str());
+    }
+}
+
+std::vector<std::string> extractMcpEnvVarsImpl(const Json& payload) {
+    std::set<std::string> vars;
+    if (!payload.is_object()) return {};
+    if (payload.contains("command") && payload.at("command").is_string()) {
+        collectEnvVarRefsFromString(payload.at("command").get<std::string>(), vars);
+    }
+    if (payload.contains("url") && payload.at("url").is_string()) {
+        collectEnvVarRefsFromString(payload.at("url").get<std::string>(), vars);
+    }
+    if (payload.contains("args") && payload.at("args").is_array()) {
+        for (const auto& arg : payload.at("args").arr()) {
+            if (arg.is_string()) collectEnvVarRefsFromString(arg.get<std::string>(), vars);
+        }
+    }
+    for (const char* mapKey : {"env", "headers"}) {
+        if (!payload.contains(mapKey) || !payload.at(mapKey).is_object()) continue;
+        for (auto it = payload.at(mapKey).begin(); it != payload.at(mapKey).end(); ++it) {
+            if (it.value().is_string()) {
+                const std::string val = it.value().get<std::string>();
+                size_t before = vars.size();
+                collectEnvVarRefsFromString(val, vars);
+                if (vars.size() == before && std::string(mapKey) == "env" && !it.key().empty()) {
+                    vars.insert(it.key());
+                }
+            }
+        }
+    }
+    return std::vector<std::string>(vars.begin(), vars.end());
+}
+
+bool matchesMcpFilters(const Json& asset, const std::string& transportFilter, bool zeroAuthOnly) {
+    if (transportFilter.empty() && !zeroAuthOnly) return true;
+    const std::string kind = asset.value("kind", std::string());
+    if (kind != "mcp") return false;
+    const Json& payload = asset.contains("payload") && asset.at("payload").is_object()
+                              ? asset.at("payload") : Json();
+    if (!transportFilter.empty()) {
+        const std::string tr = lower(payload.value("transport", std::string("stdio")));
+        if (tr != lower(transportFilter)) return false;
+    }
+    if (zeroAuthOnly) {
+        if (!extractMcpEnvVarsImpl(payload).empty()) return false;
+    }
+    return true;
+}
+
 void LibraryCatalog::reindex() {
     assetIndex_.clear();
     libraryIndex_.clear();
@@ -925,11 +999,43 @@ void LibraryCatalog::reindex() {
             haystack.push_back(' ');
             haystack += asset.value(field, std::string());
         }
+        if (asset.contains("origin") && asset.at("origin").is_object()) {
+            const Json& origin = asset.at("origin");
+            for (const char* ofield : {"repo", "canonicalKey", "templateId"}) {
+                const std::string v = origin.value(ofield, std::string());
+                if (!v.empty()) {
+                    haystack.push_back(' ');
+                    haystack += v;
+                }
+            }
+        }
+        if (asset.contains("payload") && asset.at("payload").is_object()) {
+            const Json& payload = asset.at("payload");
+            if (asset.value("kind", std::string()) == "mcp") {
+                haystack.push_back(' ');
+                haystack += payload.value("transport", std::string());
+                haystack.push_back(' ');
+                haystack += payload.value("command", std::string());
+                if (payload.contains("cachedTools") && payload.at("cachedTools").is_array()) {
+                    int toolCap = 0;
+                    for (const auto& t : payload.at("cachedTools").arr()) {
+                        if (!t.is_object() || toolCap >= 40) break;
+                        haystack.push_back(' ');
+                        haystack += t.value("name", std::string());
+                        ++toolCap;
+                    }
+                }
+            }
+        }
         searchIndex_.push_back(lower(std::move(haystack)));
     }
     for (size_t i = 0; i < libraries_.size(); ++i) {
         libraryIndex_[libraries_[i].value("id", std::string())] = i;
     }
+}
+
+std::vector<std::string> LibraryCatalog::extractMcpEnvVars(const Json& payload) {
+    return extractMcpEnvVarsImpl(payload);
 }
 
 const Json* LibraryCatalog::find(const std::string& assetId) const {
@@ -975,6 +1081,29 @@ Json LibraryCatalog::summary(const Json& asset) const {
         const Json& payload = asset.at("payload");
         if (payload.contains("template") && payload.at("template").is_object()) {
             item["nodeType"] = payload.at("template").value("taskType", std::string());
+        } else if (asset.value("kind", std::string()) == "mcp") {
+            item["nodeType"] = "mcp";
+            item["transport"] = payload.value("transport", std::string("stdio"));
+            const auto reqVars = extractMcpEnvVarsImpl(payload);
+            Json varsArr = Json::array();
+            for (const auto& v : reqVars) varsArr.push_back(v);
+            item["requiredEnvVars"] = varsArr;
+            item["requiresEnv"] = !reqVars.empty();
+            Json sampleTools = Json::array();
+            int toolCount = 0;
+            if (payload.contains("cachedTools") && payload.at("cachedTools").is_array()) {
+                toolCount = static_cast<int>(payload.at("cachedTools").arr().size());
+                for (const auto& t : payload.at("cachedTools").arr()) {
+                    if (!t.is_object()) continue;
+                    const std::string tname = t.value("name", std::string());
+                    if (!tname.empty() && sampleTools.size() < 6) sampleTools.push_back(tname);
+                }
+            }
+            item["toolCount"] = toolCount;
+            if (!sampleTools.empty()) {
+                item["defaultTool"] = sampleTools.arr().front();
+                item["sampleTools"] = sampleTools;
+            }
         }
     }
     item["description"] = cutText(asset.value("description", std::string()), kMaxDescription);
@@ -983,7 +1112,9 @@ Json LibraryCatalog::summary(const Json& asset) const {
 
 Json LibraryCatalog::list(const std::string& libraryId, const std::string& kind,
                           const std::string& domain, const std::string& subdomain,
-                          int limit, int offset) const {
+                          int limit, int offset,
+                          const std::string& transport,
+                          bool zeroAuthOnly) const {
     Json out = Json::object();
     Json libraries = Json::array();
     for (const auto& library : libraries_) libraries.push_back(library);
@@ -1004,6 +1135,7 @@ Json LibraryCatalog::list(const std::string& libraryId, const std::string& kind,
             lower(asset.value("domain", std::string())).find(domainNeedle) == std::string::npos) continue;
         if (!subdomainNeedle.empty() &&
             lower(asset.value("subdomain", std::string())).find(subdomainNeedle) == std::string::npos) continue;
+        if (!matchesMcpFilters(asset, transport, zeroAuthOnly)) continue;
         ++matched;
         if (skipped < effectiveOffset) {
             ++skipped;
@@ -1021,20 +1153,43 @@ Json LibraryCatalog::list(const std::string& libraryId, const std::string& kind,
     return out;
 }
 
-Json LibraryCatalog::search(const std::string& query, const std::string& kind, int limit) const {
+Json LibraryCatalog::search(const std::string& query, const std::string& kind, int limit,
+                            const std::string& domain, const std::string& subdomain,
+                            const std::string& transport, bool zeroAuthOnly,
+                            int offset) const {
     Json out = Json::object();
-    const std::string needle = lower(query);
+    const auto tokens = splitSearchTokens(query);
+    const std::string domainNeedle = lower(domain);
+    const std::string subdomainNeedle = lower(subdomain);
     const int effectiveLimit = limit <= 0 ? kDefaultLimit : std::min(limit, kMaxLimit);
+    const int effectiveOffset = std::max(offset, 0);
     Json items = Json::array();
     int matched = 0;
+    int skipped = 0;
     for (size_t i = 0; i < assets_.size(); ++i) {
         const Json& asset = assets_[i];
         if (!matchesKind(asset, kind)) continue;
-        if (!needle.empty()) {
+        if (!domainNeedle.empty() &&
+            lower(asset.value("domain", std::string())).find(domainNeedle) == std::string::npos) continue;
+        if (!subdomainNeedle.empty() &&
+            lower(asset.value("subdomain", std::string())).find(subdomainNeedle) == std::string::npos) continue;
+        if (!matchesMcpFilters(asset, transport, zeroAuthOnly)) continue;
+        if (!tokens.empty()) {
             const std::string& haystack = i < searchIndex_.size() ? searchIndex_[i] : std::string();
-            if (haystack.find(needle) == std::string::npos) continue;
+            bool allMatch = true;
+            for (const auto& tok : tokens) {
+                if (haystack.find(tok) == std::string::npos) {
+                    allMatch = false;
+                    break;
+                }
+            }
+            if (!allMatch) continue;
         }
         ++matched;
+        if (skipped < effectiveOffset) {
+            ++skipped;
+            continue;
+        }
         if (static_cast<int>(items.size()) >= effectiveLimit) continue;
         items.push_back(summary(asset));
     }
@@ -1042,8 +1197,42 @@ Json LibraryCatalog::search(const std::string& query, const std::string& kind, i
     out["assets"] = items;
     out["total"] = matched;
     out["returned"] = static_cast<int>(items.size());
-    out["truncated"] = matched > static_cast<int>(items.size());
+    out["offset"] = effectiveOffset;
+    out["truncated"] = matched > effectiveOffset + static_cast<int>(items.size());
     return out;
+}
+
+Json LibraryCatalog::taxonomy(const std::string& kind) const {
+    std::map<std::string, std::map<std::string, int>> counts;
+    std::map<std::string, int> byKind;
+    int total = 0;
+    for (const auto& asset : assets_) {
+        if (!matchesKind(asset, kind)) continue;
+        const std::string dom = asset.value("domain", std::string("Geral"));
+        const std::string sub = asset.value("subdomain", asset.value("category", std::string("Outros")));
+        counts[dom.empty() ? "Geral" : dom][sub.empty() ? "Outros" : sub] += 1;
+        byKind[asset.value("kind", std::string("unknown"))] += 1;
+        ++total;
+    }
+
+    Json domains = Json::object();
+    for (const auto& [dom, subs] : counts) {
+        Json subObj = Json::object();
+        int domTotal = 0;
+        for (const auto& [sub, cnt] : subs) {
+            subObj[sub] = cnt;
+            domTotal += cnt;
+        }
+        domains[dom] = Json{{"total", domTotal}, {"subdomains", subObj}};
+    }
+    Json kindCounts = Json::object();
+    for (const auto& [k, cnt] : byKind) kindCounts[k] = cnt;
+    return Json{
+        {"kind", kind.empty() ? "all" : kind},
+        {"total", total},
+        {"byKind", kindCounts},
+        {"domains", domains}
+    };
 }
 
 std::optional<Json> LibraryCatalog::detail(const std::string& assetId) const {
@@ -1052,6 +1241,37 @@ std::optional<Json> LibraryCatalog::detail(const std::string& assetId) const {
     Json out = *asset;
     if (out.contains("payload") && out.at("payload").is_object()) {
         Json& payload = out["payload"];
+        if (out.value("kind", std::string()) == "mcp") {
+            const auto reqVars = extractMcpEnvVarsImpl(payload);
+            Json varsArr = Json::array();
+            Json missingArr = Json::array();
+            Json envStatus = Json::object();
+            for (const auto& v : reqVars) {
+                varsArr.push_back(v);
+                const bool configured = !platform::getEnv(v).empty();
+                envStatus[v] = configured;
+                if (!configured) missingArr.push_back(v);
+            }
+            out["requiredEnvVars"] = varsArr;
+            out["missingEnvVars"] = missingArr;
+            out["envStatus"] = envStatus;
+            if (payload.contains("cachedTools") && payload.at("cachedTools").is_array()) {
+                const auto& rawTools = payload.at("cachedTools").arr();
+                out["totalTools"] = static_cast<int>(rawTools.size());
+                Json compactTools = Json::array();
+                constexpr size_t kMaxDetailTools = 30;
+                for (size_t i = 0; i < rawTools.size() && i < kMaxDetailTools; ++i) {
+                    const auto& t = rawTools[i];
+                    if (!t.is_object()) continue;
+                    compactTools.push_back(Json{
+                        {"name", t.value("name", std::string())},
+                        {"description", cutText(t.value("description", std::string()), 160)}
+                    });
+                }
+                payload["cachedTools"] = compactTools;
+                out["toolsTruncated"] = rawTools.size() > kMaxDetailTools;
+            }
+        }
         if (payload.contains("markdownContent")) {
             payload["markdownContent"] = cutText(payload.value("markdownContent", std::string()), kMaxMarkdown);
         }
@@ -1188,23 +1408,39 @@ bool LibraryCatalog::buildNodeFromAsset(const Json& asset, const std::string& la
     }
 
     if (kind == "mcp") {
-        std::string defaultTool;
-        if (payload.contains("cachedTools") && payload.at("cachedTools").is_array() &&
+        std::string selectedTool;
+        if (parameterOverrides.is_object() && parameterOverrides.contains("tool") &&
+            parameterOverrides.at("tool").is_string()) {
+            selectedTool = parameterOverrides.at("tool").get<std::string>();
+        }
+        if (selectedTool.empty() && payload.contains("cachedTools") && payload.at("cachedTools").is_array() &&
             !payload.at("cachedTools").arr().empty() && payload.at("cachedTools").arr().front().is_object()) {
-            defaultTool = payload.at("cachedTools").arr().front().value("name", std::string());
+            selectedTool = payload.at("cachedTools").arr().front().value("name", std::string());
+        }
+        Json toolArgs = Json::object();
+        if (parameterOverrides.is_object() && parameterOverrides.contains("arguments") &&
+            parameterOverrides.at("arguments").is_object()) {
+            toolArgs = parameterOverrides.at("arguments");
+        }
+        Json sourceSpec = Json{{"kind", "previous"}};
+        if (parameterOverrides.is_object() && parameterOverrides.contains("source") &&
+            parameterOverrides.at("source").is_object()) {
+            sourceSpec = parameterOverrides.at("source");
+        }
+        Json outputSpec = Json::object();
+        if (parameterOverrides.is_object() && parameterOverrides.contains("output") &&
+            parameterOverrides.at("output").is_object()) {
+            outputSpec = parameterOverrides.at("output");
         }
         node["type"] = "mcp";
-        node["inputs"] = Json::array({Json{{"id", nodeId + "_in_0"}, {"name", "in"},
-                                           {"direction", "input"}, {"type", "flow"}}});
-        node["outputs"] = Json::array({Json{{"id", nodeId + "_out_0"}, {"name", "out"},
-                                            {"direction", "output"}, {"type", "flow"}}});
+        node["parameters"] = Json::object();
         node["customLambdaBody"] = "";
         node["mcpSettings"] = Json{
             {"server", assetId},
-            {"tool", defaultTool},
-            {"arguments", Json::object()},
-            {"source", Json{{"kind", "previous"}}},
-            {"output", Json::object()}
+            {"tool", selectedTool},
+            {"arguments", toolArgs},
+            {"source", sourceSpec},
+            {"output", outputSpec}
         };
         if (asset.contains("origin") && asset.at("origin").is_object()) {
             node["origin"] = asset.at("origin");
@@ -1395,13 +1631,73 @@ Json LibraryCatalog::installAsset(const std::string& assetId, bool allowCaution,
         if (!writeFileAtomic(installedPath, config.dump(2), error)) {
             return Json{{"ok", false}, {"reason", error}};
         }
+
+        // Espelha a auditoria aprovada/caution em .workspace/governance/mcp-ledger.json
+        // para que attach_mcp, validate_graph e run_pipeline reconhecam o servidor imediatamente.
+        const fs::path ledgerPath = workspace / "governance" / "mcp-ledger.json";
+        Json ledger = Json::object();
+        std::error_code ledgerEc;
+        if (fs::is_regular_file(ledgerPath, ledgerEc)) {
+            if (auto existing = jsonutil::tryParse(jsonutil::readFile(ledgerPath)); existing && existing->is_object()) {
+                ledger = *existing;
+            }
+        }
+        if (!ledger.contains("version")) ledger["version"] = 1;
+        if (!ledger.contains("servers") || !ledger.at("servers").is_object()) {
+            ledger["servers"] = Json::object();
+        }
+        Json toolNames = Json::array();
+        if (payload.contains("cachedTools") && payload.at("cachedTools").is_array()) {
+            for (const auto& t : payload.at("cachedTools").arr()) {
+                if (t.is_object() && !t.value("name", std::string()).empty()) {
+                    toolNames.push_back(t.value("name", std::string()));
+                }
+            }
+        }
+        const std::string auditHash = audit.is_object() && !audit.value("hash", std::string()).empty()
+                                          ? audit.value("hash", std::string())
+                                          : sha256Json(payload);
+        Json entry = Json::object();
+        entry["hash"] = auditHash;
+        entry["serverId"] = assetId;
+        entry["name"] = asset->value("name", assetId);
+        entry["transport"] = payload.value("transport", std::string("stdio"));
+        entry["verdict"] = audit.is_object() ? audit.value("verdict", std::string("APPROVE")) : std::string("APPROVE");
+        entry["riskScore"] = audit.is_object() ? audit.value("riskScore", 0) : 0;
+        entry["auditedAt"] = nowIso();
+        entry["auditedBy"] = "ArestrixLibraryCatalog";
+        entry["toolCount"] = static_cast<int>(toolNames.size());
+        entry["toolNames"] = toolNames;
+        entry["provenance"] = asset->value("bundledInProduct", false) ? "workspace-curated" : "external-custom";
+        ledger["servers"][auditHash] = entry;
+        ledger["updatedAt"] = nowIso();
+        std::string ledgerErr;
+        writeFileAtomic(ledgerPath, ledger.dump(2), ledgerErr);
     }
 
     (*asset)["status"] = "installed";
     (*asset)["updatedAt"] = nowIso();
     if (!saveState(error)) return Json{{"ok", false}, {"reason", error}};
     reindex();
-    return Json{{"ok", true}, {"asset_id", assetId}, {"path", installedPath.string()}, {"status", "installed"}};
+    Json result{{"ok", true}, {"asset_id", assetId}, {"kind", kind}, {"path", installedPath.string()}, {"status", "installed"}};
+    if (kind == "mcp") {
+        const Json& payload = asset->at("payload");
+        const auto reqVars = extractMcpEnvVarsImpl(payload);
+        Json reqArr = Json::array();
+        Json missingArr = Json::array();
+        for (const auto& v : reqVars) {
+            reqArr.push_back(v);
+            if (platform::getEnv(v).empty()) missingArr.push_back(v);
+        }
+        result["requiredEnvVars"] = reqArr;
+        result["missingEnvVars"] = missingArr;
+        if (payload.contains("cachedTools") && payload.at("cachedTools").is_array() &&
+            !payload.at("cachedTools").arr().empty() && payload.at("cachedTools").arr().front().is_object()) {
+            result["defaultTool"] = payload.at("cachedTools").arr().front().value("name", std::string());
+            result["toolCount"] = static_cast<int>(payload.at("cachedTools").arr().size());
+        }
+    }
+    return result;
 }
 
 Json LibraryCatalog::deriveAsset(const std::string& assetId, const std::string& name,

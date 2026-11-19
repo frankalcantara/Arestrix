@@ -3335,6 +3335,92 @@ public:
             projectId, playbookId, reason.empty() ? "studio-assistant" : reason, error);
     }
 
+    bool setNonSecretEnv(const std::string& key, const std::string& value, std::string& error) override {
+        if (!taskforge::platform::setUserEnv(key, value)) {
+            error = "falha ao persistir variavel de ambiente";
+            return false;
+        }
+        return true;
+    }
+
+    taskforge::Json compileProject(const taskforge::Json& schema, bool exportStandalone,
+                                   const taskforge::Json& runnerPatch, std::string& error) override {
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        auto cur = pm.getCurrentProject();
+        const std::string root = cur.rootPath.empty() ? pm.getActiveProjectRoot() : cur.rootPath;
+        if (root.empty()) {
+            error = "nenhum projeto ativo";
+            return taskforge::Json{{"ok", false}, {"error", error}};
+        }
+
+        taskforge::core::Graph g;
+        loadGraphFromPayload(schema.dump(), g);
+
+        if (runnerPatch.is_object() && !runnerPatch.empty()) {
+            if (runnerPatch.contains("outputName") && runnerPatch["outputName"].is_string()) {
+                cur.runner.outputName = runnerPatch["outputName"].get<std::string>();
+            }
+            if (runnerPatch.contains("outputDir") && runnerPatch["outputDir"].is_string()) {
+                cur.runner.outputDir = runnerPatch["outputDir"].get<std::string>();
+            }
+            if (runnerPatch.contains("title") && runnerPatch["title"].is_string()) {
+                cur.runner.title = runnerPatch["title"].get<std::string>();
+            }
+            pm.saveProject(cur);
+        }
+
+        std::vector<std::string> buildLogs;
+        taskforge::build::BuildEvents ev;
+        ev.onLog = [&](const std::string& line, bool isErr) {
+            if (isErr || buildLogs.size() < 40) buildLogs.push_back(line);
+        };
+        auto br = taskforge::build::buildOnly(g, root, ev);
+        if (!br.success) {
+            error = br.error.empty() ? "Falha na compilacao C++20." : br.error;
+            taskforge::Json logs = taskforge::Json::array();
+            for (const auto& l : buildLogs) logs.push_back(l);
+            return taskforge::Json{
+                {"ok", false},
+                {"stage", br.stage},
+                {"exitCode", br.exitCode},
+                {"error", error},
+                {"logs", logs}
+            };
+        }
+
+        if (!exportStandalone) {
+            fs::path exePath = fs::path(root) / ".arestrix" / "build" /
+#ifdef _WIN32
+                               "pipeline_app.exe";
+#else
+                               "pipeline_app";
+#endif
+            return taskforge::Json{
+                {"ok", true},
+                {"mode", "check"},
+                {"elapsedMs", br.elapsedMs},
+                {"executablePath", exePath.string()}
+            };
+        }
+
+        auto exp = taskforge::project::RunnerService::exportRunner(root, cur, g);
+        if (!exp.ok) {
+            error = exp.error.empty() ? "Falha ao exportar executavel standalone." : exp.error;
+            return taskforge::Json{{"ok", false}, {"error", error}};
+        }
+        taskforge::Json warnings = taskforge::Json::array();
+        for (const auto& w : exp.warnings) warnings.push_back(w);
+        return taskforge::Json{
+            {"ok", true},
+            {"mode", "standalone"},
+            {"elapsedMs", br.elapsedMs},
+            {"outputDir", exp.outputDir},
+            {"executablePath", exp.executablePath},
+            {"manifestPath", exp.manifestPath},
+            {"warnings", warnings}
+        };
+    }
+
     fs::path docsDirectory(taskforge::rt::RuntimeLang lang) override {
         return findProjectRoot() / "docs" / (lang == taskforge::rt::RuntimeLang::En ? "en" : "pt-BR");
     }

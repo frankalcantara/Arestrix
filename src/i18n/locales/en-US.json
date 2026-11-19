@@ -2360,10 +2360,15 @@
       "attach_mcp": "Attached MCP server \"{{server}}\" to vertex \"{{label}}\"",
       "list_mcp_servers": "Checked the MCP servers",
       "list_mcp_tools": "Checked the MCP tools of {{server}}",
-      "library_list_assets": "Browsed the Vertex and Agent Library",
+      "library_taxonomy": "Checked library taxonomy ({{kind}})",
+      "library_list_assets": "Browsed the Vertex, Agent and MCP Library",
       "library_search_assets": "Searched the library for \"{{query}}\"",
       "library_get_asset": "Read library asset \"{{name}}\"",
+      "library_install_asset": "Installed library asset \"{{asset}}\" into Workspace",
       "library_add_node": "Created vertex \"{{label}}\" from a library asset",
+      "check_environment": "Checked environment ({{checked}} vars, {{missing}} missing)",
+      "configure_environment": "Configured environment ({{applied}} applied)",
+      "compile_project": "Compiled project ({{mode}})",
       "add_node": "Added vertex \"{{label}}\"",
       "update_node": "Changed vertex \"{{label}}\"",
       "remove_node": "Removed vertex \"{{label}}\"",
@@ -2383,7 +2388,9 @@
       "update_project": "The Assistant wants to change the properties of the active project.",
       "clear_graph": "The Assistant wants to start a new graph, removing every vertex from the canvas.",
       "save_project": "The Assistant wants to save the canvas graph into the active project.",
-      "run_pipeline": "The Assistant wants to compile and run the pipeline. This may spend tokens and run code."
+      "run_pipeline": "The Assistant wants to compile and run the pipeline. This may spend tokens and run code.",
+      "configure_environment": "The Assistant wants to configure non-secret environment variables or request Studio credential setup.",
+      "compile_project": "The Assistant wants to compile the project to C++20 and export the standalone executable."
     },
     "errors": {
       "model_not_configured": "The Studio default AI is not configured (Studio Properties > Studio model).",

@@ -10,7 +10,9 @@
 #include <sstream>
 #include <system_error>
 
+#include "build/BuildService.hpp"
 #include "libraries/LibraryCatalog.hpp"
+#include "platform/Process.hpp"
 #include "rt/McpTools.hpp"
 #include "util/Json.hpp"
 
@@ -61,6 +63,61 @@ std::optional<double> argNum(const Json& args, const char* key) {
 Json argObj(const Json& args, const char* key) {
     if (!args.is_object() || !args.contains(key) || !args.at(key).is_object()) return Json::object();
     return args.at(key);
+}
+
+bool argBool(const Json& args, const char* key, bool fallback = false) {
+    if (!args.is_object() || !args.contains(key) || !args.at(key).is_boolean()) return fallback;
+    return args.at(key).get<bool>();
+}
+
+bool isValidEnvName(const std::string& key) {
+    if (key.empty() || key.size() > 128) return false;
+    unsigned char first = static_cast<unsigned char>(key[0]);
+    if (!(std::isupper(first) || first == '_')) return false;
+    for (unsigned char c : key) {
+        if (!(std::isupper(c) || std::isdigit(c) || c == '_')) return false;
+    }
+    return true;
+}
+
+bool isSecretEnvName(const std::string& key) {
+    std::string up = key;
+    for (auto& c : up) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    static const char* kPatterns[] = {
+        "KEY", "TOKEN", "SECRET", "PASSWORD", "PASS", "AUTH",
+        "CREDENTIAL", "COOKIE", "BEARER", "PRIVATE", "SIGNING"
+    };
+    for (const char* pat : kPatterns) {
+        if (up.find(pat) != std::string::npos) return true;
+    }
+    return false;
+}
+
+Json readInstalledMcpConfig(const fs::path& root, const std::string& serverId) {
+    if (root.empty() || serverId.empty()) return Json();
+    const fs::path dir = root / ".workspace" / "mcps";
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) return Json();
+    auto lowerCmp = [](std::string s) {
+        for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    };
+    const std::string wanted = lowerCmp(serverId);
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file(ec) || entry.path().extension() != ".json") continue;
+        auto parsed = jsonutil::tryParse(jsonutil::readFile(entry.path()));
+        if (!parsed || !parsed->is_object()) continue;
+        if (lowerCmp(parsed->value("id", std::string())) == wanted) return *parsed;
+    }
+    return Json();
+}
+
+std::vector<std::string> missingEnvVarsForConfig(const Json& mcpPayload) {
+    std::vector<std::string> missing;
+    for (const auto& var : LibraryCatalog::extractMcpEnvVars(mcpPayload)) {
+        if (platform::getEnv(var).empty()) missing.push_back(var);
+    }
+    return missing;
 }
 
 // Caminho de subflows/modulos (ex.: ["subflowA", "subflowB"]). Ausente = grafo raiz.
@@ -661,54 +718,129 @@ std::vector<AssistantToolDef> assistantTools(RuntimeLang lang) {
                {"server"}),
         ToolRisk::Read));
 
-    // --- Biblioteca de Vertices e Agentes ---
+    // --- Biblioteca de Vertices, Agentes e MCPs ---
+    tools.push_back(tool("library_taxonomy",
+        L("Devolve a taxonomia em 2 niveis (dominio -> subdominio -> contagem) da Biblioteca Arestrix "
+          "(500+ MCPs, 322+ agentes, skills). Use primeiro para localizar rapidamente o dominio certo.",
+          "Returns the 2-level taxonomy (domain -> subdomain -> count) of the Arestrix Library "
+          "(500+ MCPs, 322+ agents, skills). Call this first to quickly locate the right domain."),
+        object(Json{{"kind", prop("string", L("Filtro opcional: mcp, agent-template, pipeline ou skill.",
+                                              "Optional filter: mcp, agent-template, pipeline or skill."))}}),
+        ToolRisk::Read));
     tools.push_back(tool("library_list_assets",
-        L("Lista a Biblioteca de Vertices e Agentes (nativa + Workspace): id, tipo, biblioteca, dominio, "
-          "subdominio, status e veredito. Use os ids com library_get_asset e library_add_node.",
-          "Lists the Arestrix Vertex and Agent Library (native + Workspace): id, kind, library, domain, "
-          "subdomain, status and verdict. Use the ids with library_get_asset and library_add_node."),
+        L("Lista a Biblioteca do Arestrix (nativa + Workspace): id, tipo, dominio, subdominio, status, veredito "
+          "e (para MCPs) transporte, defaultTool, sampleTools e requiredEnvVars.",
+          "Lists the Arestrix Library (native + Workspace): id, kind, domain, subdomain, status, verdict "
+          "and (for MCPs) transport, defaultTool, sampleTools and requiredEnvVars."),
         object(Json{{"library", prop("string", L("Id da biblioteca (opcional).", "Library id (optional)."))},
-                    {"kind", prop("string", L("Tipo: agent-template, pipeline, skill ou mcp (opcional).",
-                                              "Kind: agent-template, pipeline, skill or mcp (optional)."))},
+                    {"kind", prop("string", L("Tipo: mcp, agent-template, pipeline ou skill (opcional).",
+                                              "Kind: mcp, agent-template, pipeline or skill (optional)."))},
                     {"domain", prop("string", L("Filtro por dominio (opcional).", "Domain filter (optional)."))},
                     {"subdomain", prop("string", L("Filtro por subdominio (opcional).", "Subdomain filter (optional)."))},
+                    {"transport", prop("string", L("Filtro MCP por transporte: stdio ou sse (opcional).",
+                                                   "MCP transport filter: stdio or sse (optional)."))},
+                    {"zero_auth", prop("boolean", L("Se true, retorna apenas MCPs que nao exigem variaveis de ambiente.",
+                                                    "If true, returns only MCPs requiring no environment variables."))},
                     {"limit", prop("number", L("Maximo de itens (padrao 40, maximo 100).",
                                                "Maximum items (default 40, max 100)."))},
                     {"offset", prop("number", L("Deslocamento para paginar (opcional).", "Paging offset (optional)."))}}),
         ToolRisk::Read));
     tools.push_back(tool("library_search_assets",
-        L("Busca ativos da biblioteca por nome, descricao, categoria, dominio ou subdominio.",
-          "Searches library assets by name, description, category, domain or subdomain."),
-        object(Json{{"query", prop("string", L("Texto da busca.", "Search text."))},
-                    {"kind", prop("string", L("Tipo de ativo (opcional).", "Asset kind (optional)."))},
+        L("Busca multi-token na biblioteca por nome, descricao, dominio, subdominio, repositorio ou nomes de ferramentas MCP.",
+          "Multi-token search across the library by name, description, domain, subdomain, repo or MCP tool names."),
+        object(Json{{"query", prop("string", L("Palavras-chave da busca (todas devem casar).", "Search keywords (all must match)."))},
+                    {"kind", prop("string", L("Tipo: mcp, agent-template, pipeline ou skill (opcional).",
+                                              "Kind: mcp, agent-template, pipeline or skill (optional)."))},
+                    {"domain", prop("string", L("Filtro por dominio (opcional).", "Domain filter (optional)."))},
+                    {"subdomain", prop("string", L("Filtro por subdominio (opcional).", "Subdomain filter (optional)."))},
+                    {"transport", prop("string", L("Filtro MCP: stdio ou sse (opcional).", "MCP filter: stdio or sse (optional)."))},
+                    {"zero_auth", prop("boolean", L("Se true, apenas MCPs sem variaveis de ambiente obrigatorias.",
+                                                    "If true, only MCPs without required env vars."))},
                     {"limit", prop("number", L("Maximo de itens (padrao 40, maximo 100).",
-                                               "Maximum items (default 40, max 100)."))}},
+                                               "Maximum items (default 40, max 100)."))},
+                    {"offset", prop("number", L("Deslocamento para paginar (opcional).", "Paging offset (optional)."))}} ,
                {"query"}),
         ToolRisk::Read));
     tools.push_back(tool("library_get_asset",
-        L("Le um ativo da biblioteca pelo id: metadados, auditoria, template e configuracao completa do agente.",
-          "Reads a library asset by id: metadata, audit, template and full agent settings."),
-        object(Json{{"id", prop("string", L("Id do ativo (veja library_list_assets).",
-                                            "Asset id (see library_list_assets)."))}},
+        L("Le um ativo da biblioteca pelo id: metadados, auditoria, template ou payload MCP (com requiredEnvVars, "
+          "missingEnvVars, envStatus e resumo das cachedTools).",
+          "Reads a library asset by id: metadata, audit, template or MCP payload (with requiredEnvVars, "
+          "missingEnvVars, envStatus and compact cachedTools)."),
+        object(Json{{"id", prop("string", L("Id do ativo (veja library_list_assets ou library_search_assets).",
+                                            "Asset id (see library_list_assets or library_search_assets)."))}},
                {"id"}),
         ToolRisk::Read));
+    tools.push_back(tool("library_install_asset",
+        L("Instala um ativo MCP ou skill da Biblioteca no Workspace (.workspace/mcps ou .workspace/skills) e registra "
+          "a homologacao no ledger. Devolve requiredEnvVars e missingEnvVars (nunca expoe segredos).",
+          "Installs an MCP or skill library asset into the Workspace (.workspace/mcps or .workspace/skills) and "
+          "records its approval in the governance ledger. Returns requiredEnvVars and missingEnvVars (never exposes secrets)."),
+        object(Json{{"asset_id", prop("string", L("Id do ativo MCP ou skill.", "MCP or skill asset id."))},
+                    {"allow_caution", prop("boolean", L("Permite instalar ativos com veredito CAUTION (padrao true).",
+                                                        "Allow installing CAUTION verdict assets (default true)."))}},
+               {"asset_id"}),
+        ToolRisk::Edit));
     tools.push_back(tool("library_add_node",
-        L("Cria um vertice no grafo a partir de um ativo da biblioteca. agent-template e pipeline preservam "
-          "portas, parametros e agentSettings; skill cria um vertice agente com a skill anexada. Depois use "
-          "connect para ligar as portas e validate_graph para conferir.",
-          "Creates a graph vertex from a library asset. agent-template and pipeline preserve ports, parameters "
-          "and agentSettings; skill creates an agent vertex with the skill attached. Then use connect to wire "
-          "the ports and validate_graph to check."),
-        object(Json{{"asset_id", prop("string", L("Id do ativo (veja library_list_assets).",
-                                                   "Asset id (see library_list_assets)."))},
+        L("Cria um vertice no grafo a partir de um ativo da biblioteca em 1 passo. Para agent-template/pipeline/skill, "
+          "preserva agentSettings e portas. Para mcp, instala automaticamente o servidor no Workspace + ledger e cria "
+          "o vertice de interacao type='mcp' pronto para conectar.",
+          "Creates a graph vertex from a library asset in 1 step. For agent-template/pipeline/skill, preserves "
+          "agentSettings and ports. For mcp, automatically installs the server into the Workspace + ledger and creates "
+          "the type='mcp' interaction vertex ready to connect."),
+        object(Json{{"asset_id", prop("string", L("Id do ativo (veja library_search_assets).",
+                                                   "Asset id (see library_search_assets)."))},
                     {"label", prop("string", L("Rotulo do vertice (opcional; padrao = nome do ativo).",
                                                "Vertex label (optional; default = asset name)."))},
                     {"x", prop("number", L("Posicao horizontal (opcional).", "Horizontal position (optional)."))},
                     {"y", prop("number", L("Posicao vertical (opcional).", "Vertical position (optional)."))},
-                    {"parameters", prop("object", L("Sobrescreve parametros do template (opcional).",
-                                                    "Overrides template parameters (optional)."))}},
+                    {"parameters", prop("object", L("Sobrescreve parametros do template ou tool/arguments/source/output de um MCP (opcional).",
+                                                    "Overrides template parameters or MCP tool/arguments/source/output (optional)."))},
+                    {"tool", prop("string", L("Ferramenta MCP inicial (opcional; padrao = primeira tool do servidor).",
+                                              "Initial MCP tool (optional; default = server's first tool)."))},
+                    {"arguments", prop("object", L("Argumentos JSON iniciais da ferramenta MCP (opcional).",
+                                                   "Initial JSON arguments for the MCP tool (optional)."))}},
                {"asset_id"}),
         ToolRisk::Edit));
+
+    // --- Ambiente e Compilacao Standalone ---
+    tools.push_back(tool("check_environment",
+        L("Verifica prontidao do ambiente sem expor segredos: status (configurada true/false) das variaveis de ambiente "
+          "exigidas pelos MCPs instalados ou pedidas em 'vars', alem do compilador C++20 e runtime do Arestrix.",
+          "Checks environment readiness without exposing secrets: configured (true/false) status of env vars required "
+          "by installed MCPs or requested in 'vars', plus C++20 compiler and Arestrix runtime availability."),
+        object(Json{{"vars", Json{{"type", "array"},
+                                  {"description", L("Lista opcional de nomes de variaveis de ambiente a verificar.",
+                                                    "Optional list of environment variable names to check.")}}}}),
+        ToolRisk::Read));
+    tools.push_back(tool("configure_environment",
+        L("Configura variaveis de ambiente NAO-SECRETAS (ex.: AWS_REGION, ARESTRIX_DEFAULT_PROVIDER, LOCAL_LLM_BASE_URL) "
+          "e/ou registra uma lista de variaveis secretas ausentes (request_user_secrets) para o usuario configurar com "
+          "seguranca no painel de Ambiente do Studio. Bloqueia qualquer segredo passado em texto. Pede confirmacao.",
+          "Configures NON-SECRET environment variables (e.g., AWS_REGION, ARESTRIX_DEFAULT_PROVIDER, LOCAL_LLM_BASE_URL) "
+          "and/or lists missing secret variable names (request_user_secrets) for the user to set safely in Studio's "
+          "Environment panel. Hard-blocks secrets passed in plaintext. Asks the user to confirm."),
+        object(Json{{"set_non_secret", prop("object", L("Mapa {NOME_VAR: valor} apenas para configuracoes nao-secretas.",
+                                                        "Map {VAR_NAME: value} for non-secret settings only."))},
+                    {"request_user_secrets", Json{{"type", "array"},
+                                                  {"description", L("Nomes de variaveis secretas que o usuario deve configurar no Studio (ex.: [\"GITHUB_PERSONAL_ACCESS_TOKEN\"]).",
+                                                                    "Secret env var names the user should configure in Studio (e.g. [\"GITHUB_PERSONAL_ACCESS_TOKEN\"]).")}}}}),
+        ToolRisk::Confirm));
+    tools.push_back(tool("compile_project",
+        L("Valida, salva e compila o grafo atual em C++20/Taskflow. No modo 'check', apenas verifica a compilacao; "
+          "no modo 'standalone' (padrao), tambem empacota o executavel autonomo (.exe/binario + manifesto + skills + MCPs) "
+          "via RunnerService. Pede confirmacao ao usuario.",
+          "Validates, saves and compiles the current graph to C++20/Taskflow. In 'check' mode, verifies compilation only; "
+          "in 'standalone' mode (default), also exports the standalone executable package (binary + manifest + skills + MCPs) "
+          "via RunnerService. Asks the user to confirm."),
+        object(Json{{"mode", prop("string", L("'standalone' (padrao) ou 'check' (somente compilar).",
+                                              "'standalone' (default) or 'check' (compile-only)."))},
+                    {"output_name", prop("string", L("Nome do executavel standalone (opcional).", "Standalone executable name (optional)."))},
+                    {"output_dir", prop("string", L("Pasta de saida relativa ao projeto (opcional; padrao dist/runner).",
+                                                    "Output directory relative to project (optional; default dist/runner)."))},
+                    {"title", prop("string", L("Titulo do aplicativo standalone no manifesto (opcional).",
+                                               "Standalone app title in manifest (optional)."))}},
+               {}),
+        ToolRisk::Confirm));
 
     // --- Editar o grafo (aparece no canvas e pode ser desfeito) ---
     tools.push_back(tool("add_node",
@@ -1181,11 +1313,19 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                 {"content", content}
             }, name, Json{{"path", filePath}});
         }
-        if (name == "library_list_assets" || name == "library_search_assets" ||
-            name == "library_get_asset") {
+        if (name == "library_taxonomy" || name == "library_list_assets" ||
+            name == "library_search_assets" || name == "library_get_asset" ||
+            name == "library_install_asset") {
             LibraryCatalog catalog;
             std::string warning;
             LibraryCatalog::load(projectRootOf(host), catalog, warning);
+
+            if (name == "library_taxonomy") {
+                const std::string kind = argStr(args, "kind");
+                Json result = catalog.taxonomy(kind);
+                if (!warning.empty()) result["warning"] = warning;
+                return okOutcome(result, name, Json{{"kind", kind.empty() ? "all" : kind}});
+            }
 
             if (name == "library_list_assets") {
                 int limit = 0, offset = 0;
@@ -1193,7 +1333,8 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                 if (auto n = argNum(args, "offset")) offset = static_cast<int>(*n);
                 Json result = catalog.list(argStr(args, "library"), argStr(args, "kind"),
                                            argStr(args, "domain"), argStr(args, "subdomain"),
-                                           limit, offset);
+                                           limit, offset, argStr(args, "transport"),
+                                           argBool(args, "zero_auth", false));
                 if (!warning.empty()) result["warning"] = warning;
                 return okOutcome(result, name,
                                  Json{{"library", argStr(args, "library")}, {"kind", argStr(args, "kind")}});
@@ -1205,11 +1346,31 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                     return fail(langPick(lang, "Informe um texto para buscar.",
                                          "Provide a search text."), name);
                 }
-                int limit = 0;
+                int limit = 0, offset = 0;
                 if (auto n = argNum(args, "limit")) limit = static_cast<int>(*n);
-                Json result = catalog.search(query, argStr(args, "kind"), limit);
+                if (auto n = argNum(args, "offset")) offset = static_cast<int>(*n);
+                Json result = catalog.search(query, argStr(args, "kind"), limit,
+                                             argStr(args, "domain"), argStr(args, "subdomain"),
+                                             argStr(args, "transport"), argBool(args, "zero_auth", false),
+                                             offset);
                 if (!warning.empty()) result["warning"] = warning;
                 return okOutcome(result, name, Json{{"query", query}});
+            }
+
+            if (name == "library_install_asset") {
+                const std::string assetId = argStr(args, "asset_id");
+                if (assetId.empty()) {
+                    return fail(langPick(lang, "Informe o asset_id para instalar.",
+                                         "Provide the asset_id to install."), name);
+                }
+                const bool allowCaution = argBool(args, "allow_caution", true);
+                std::string installErr;
+                Json result = catalog.installAsset(assetId, allowCaution, installErr);
+                if (!result.value("ok", false)) {
+                    return fail(installErr.empty() ? result.value("reason", std::string("Falha ao instalar ativo.")) : installErr, name);
+                }
+                if (!warning.empty()) result["warning"] = warning;
+                return okOutcome(result, name, Json{{"asset", assetId}, {"kind", result.value("kind", std::string())}});
             }
 
             const std::string id = argStr(args, "id");
@@ -1246,10 +1407,29 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
         }
         if (name == "list_mcp_tools") {
             std::string server = argStr(args, "server");
+            const fs::path root = projectRootOf(host);
             try {
-                Json toolList = rt::McpToolbox::listServerTools(projectRootOf(host), server);
-                return okOutcome(Json{{"server", server}, {"tools", toolList}}, name, Json{{"server", server}});
+                Json toolList = rt::McpToolbox::listServerTools(root, server);
+                return okOutcome(Json{{"server", server}, {"source", "live"}, {"tools", toolList}}, name,
+                                 Json{{"server", server}});
             } catch (const std::exception& ex) {
+                // Fallback seguro para cachedTools quando o servidor instalado depende de ${VAR} ainda nao definida.
+                Json cachedCfg = readInstalledMcpConfig(root, server);
+                if (cachedCfg.is_object()) {
+                    Json missingArr = Json::array();
+                    for (const auto& v : missingEnvVarsForConfig(cachedCfg)) missingArr.push_back(v);
+                    Json cachedTools = cachedCfg.contains("cachedTools") && cachedCfg.at("cachedTools").is_array()
+                                           ? cachedCfg.at("cachedTools") : Json::array();
+                    if (!cachedTools.empty() || !missingArr.empty()) {
+                        return okOutcome(Json{
+                            {"server", server},
+                            {"source", "cached"},
+                            {"tools", cachedTools},
+                            {"missingEnvVars", missingArr},
+                            {"liveError", ex.what()}
+                        }, name, Json{{"server", server}});
+                    }
+                }
                 return fail(langPick(lang, "Falha ao listar ferramentas de '", "Failed to list tools of '") + server +
                             "': " + ex.what(), name);
             }
@@ -1335,12 +1515,32 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                 return fail(langPick(lang, "Vertice nao encontrado: '", "Vertex not found: '") + nodeId + "'.", name);
             }
             std::string serverError;
-            Json serverInfo = findMcpServer(projectRootOf(host), server, serverError);
+            const fs::path root = projectRootOf(host);
+            Json serverInfo = findMcpServer(root, server, serverError);
+            bool autoInstalled = false;
+            if (!serverInfo.is_object()) {
+                // Se o id existir como ativo MCP aprovado/caution na Biblioteca, instala automaticamente no Workspace.
+                LibraryCatalog catalog;
+                std::string warning;
+                LibraryCatalog::load(root, catalog, warning);
+                if (const Json* libAsset = catalog.find(server);
+                    libAsset && libAsset->value("kind", std::string()) == "mcp") {
+                    std::string instErr;
+                    Json instRes = catalog.installAsset(server, true, instErr);
+                    if (instRes.value("ok", false)) {
+                        autoInstalled = true;
+                        serverError.clear();
+                        serverInfo = findMcpServer(root, server, serverError);
+                    } else if (!instErr.empty()) {
+                        serverError = instErr;
+                    }
+                }
+            }
             if (!serverInfo.is_object()) {
                 return fail(langPick(lang, "Servidor MCP '", "MCP server '") + server + "': " + serverError + ".", name);
             }
             server = serverInfo.value("id", server);
-            McpApproval approval = mcpApproval(projectRootOf(host), server);
+            McpApproval approval = mcpApproval(root, server);
             if (approval.status == McpStatus::Rejected) {
                 return fail(langPick(lang, "O servidor MCP '", "MCP server '") + server +
                             langPick(lang, "' foi REJEITADO pela governanca do Studio. Corrija as vulnerabilidades antes de usa-lo.",
@@ -1351,12 +1551,28 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                             langPick(lang, "' esta pendente de auditoria. Audite-o em Workspace > Servidores MCP antes de anexa-lo.",
                                      "' is pending audit. Audit it in Workspace > MCP servers before attaching it."), name);
             }
+            Json missingEnvArr = Json::array();
+            if (Json installedCfg = readInstalledMcpConfig(root, server); installedCfg.is_object()) {
+                for (const auto& v : missingEnvVarsForConfig(installedCfg)) missingEnvArr.push_back(v);
+                if (approval.toolNames.empty() && installedCfg.contains("cachedTools") &&
+                    installedCfg.at("cachedTools").is_array()) {
+                    for (const auto& t : installedCfg.at("cachedTools").arr()) {
+                        if (t.is_object() && !t.value("name", std::string()).empty()) {
+                            approval.toolNames.push_back(t.value("name", std::string()));
+                        }
+                    }
+                }
+            }
             if (!tool.empty() && tool != "*") {
                 std::string toolError;
-                if (!mcpToolExists(projectRootOf(host), server, tool, approval, toolError)) {
-                    return fail(langPick(lang, "Ferramenta '", "Tool '") + tool + langPick(lang, "' indisponivel em '",
-                                                                                          "' is not available on '") +
-                                server + "': " + toolError + ".", name);
+                if (!mcpToolExists(root, server, tool, approval, toolError)) {
+                    // Se as variaveis de ambiente ainda faltam e nao ha cachedTools declaradas, permite configurar o nome
+                    // informado retornando missingEnvVars como aviso.
+                    if (missingEnvArr.empty() || !approval.toolNames.empty()) {
+                        return fail(langPick(lang, "Ferramenta '", "Tool '") + tool + langPick(lang, "' indisponivel em '",
+                                                                                              "' is not available on '") +
+                                    server + "': " + toolError + ".", name);
+                    }
                 }
             }
 
@@ -1377,7 +1593,9 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                 if (args.contains("output") && args.at("output").is_object()) settings["output"] = args.at("output");
                 auto r = doc.updateNode(nodeId, Json{{"mcpSettings", settings}}, lang);
                 if (!r.ok) return fail(r.error, name);
-                ToolOutcome o = okOutcome(Json{{"node", nodeId}, {"server", server}, {"tool", tool}}, name,
+                Json res{{"node", nodeId}, {"server", server}, {"tool", tool}, {"autoInstalled", autoInstalled}};
+                if (!missingEnvArr.empty()) res["missingEnvVars"] = missingEnvArr;
+                ToolOutcome o = okOutcome(res, name,
                                           Json{{"label", node->value("label", nodeId)}, {"server", server}, {"tool", tool}});
                 if (!r.uiOp.is_null()) o.uiOps.push_back(r.uiOp);
                 return o;
@@ -1450,9 +1668,10 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                 return fail(langPick(lang, "Informe o asset_id do ativo da biblioteca.",
                                      "Provide the library asset_id."), name);
             }
+            const fs::path root = projectRootOf(host);
             LibraryCatalog catalog;
             std::string warning;
-            LibraryCatalog::load(projectRootOf(host), catalog, warning);
+            LibraryCatalog::load(root, catalog, warning);
             const Json* asset = catalog.find(assetId);
             if (!asset) {
                 return fail(langPick(lang, "Ativo nao encontrado na biblioteca: '",
@@ -1461,9 +1680,31 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
                                      "Use library_list_assets or library_search_assets."), name);
             }
 
+            Json overrides = argObj(args, "parameters");
+            const std::string explicitTool = argStr(args, "tool");
+            if (!explicitTool.empty()) overrides["tool"] = explicitTool;
+            if (args.contains("arguments") && args.at("arguments").is_object()) {
+                overrides["arguments"] = args.at("arguments");
+            }
+
+            bool mcpInstalled = false;
+            Json reqEnvVars = Json::array();
+            Json missingEnvVars = Json::array();
+            if (asset->value("kind", std::string()) == "mcp") {
+                std::string instErr;
+                Json instRes = catalog.installAsset(assetId, true, instErr);
+                if (!instRes.value("ok", false)) {
+                    return fail(instErr.empty() ? instRes.value("reason", std::string("Falha ao instalar MCP.")) : instErr, name);
+                }
+                mcpInstalled = true;
+                if (instRes.contains("requiredEnvVars")) reqEnvVars = instRes.at("requiredEnvVars");
+                if (instRes.contains("missingEnvVars")) missingEnvVars = instRes.at("missingEnvVars");
+                asset = catalog.find(assetId);
+            }
+
             Json node;
             std::string error;
-            if (!catalog.buildNodeFromAsset(*asset, argStr(args, "label"), argObj(args, "parameters"),
+            if (!catalog.buildNodeFromAsset(*asset, argStr(args, "label"), overrides,
                                             lang, node, error)) {
                 return fail(error, name);
             }
@@ -1476,18 +1717,172 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
             auto r = doc.addNodeJson(node, lang);
             if (!r.ok) return fail(r.error, name);
             const std::string nodeId = r.result.value("id", std::string());
-            ToolOutcome o = okOutcome(
-                Json{{"node_id", nodeId},
-                     {"type", r.result.value("type", std::string())},
-                     {"label", r.result.value("label", std::string())},
-                     {"asset_id", assetId},
-                     {"ports", Json{{"inputs", r.result.value("inputs", Json::array())},
-                                    {"outputs", r.result.value("outputs", Json::array())}}},
-                     {"next", langPick(lang, "Use connect para ligar as portas e validate_graph para conferir.",
-                                       "Use connect to wire the ports and validate_graph to check.")}},
-                name, Json{{"label", r.result.value("label", std::string())}, {"asset", assetId}});
+            Json res{
+                {"node_id", nodeId},
+                {"type", r.result.value("type", std::string())},
+                {"label", r.result.value("label", std::string())},
+                {"asset_id", assetId},
+                {"ports", Json{{"inputs", r.result.value("inputs", Json::array())},
+                               {"outputs", r.result.value("outputs", Json::array())}}},
+                {"next", langPick(lang, "Use connect para ligar as portas e validate_graph para conferir.",
+                                  "Use connect to wire the ports and validate_graph to check.")}
+            };
+            if (mcpInstalled) {
+                res["installed"] = true;
+                res["server"] = assetId;
+                if (node.contains("mcpSettings") && node.at("mcpSettings").is_object()) {
+                    res["tool"] = node.at("mcpSettings").value("tool", std::string());
+                }
+                res["requiredEnvVars"] = reqEnvVars;
+                res["missingEnvVars"] = missingEnvVars;
+            }
+            ToolOutcome o = okOutcome(res, name, Json{{"label", r.result.value("label", std::string())}, {"asset", assetId}});
             if (!r.uiOp.is_null()) o.uiOps.push_back(r.uiOp);
             return o;
+        }
+
+        if (name == "check_environment") {
+            const fs::path root = projectRootOf(host);
+            std::set<std::string> varsToCheck;
+            if (args.contains("vars") && args.at("vars").is_array()) {
+                for (const auto& item : args.at("vars").arr()) {
+                    if (item.is_string() && isValidEnvName(item.get<std::string>())) {
+                        varsToCheck.insert(item.get<std::string>());
+                    }
+                }
+            }
+            // Tambem coleta todas as ${VAR} exigidas pelos MCPs instalados no Workspace.
+            int installedMcpCount = 0;
+            std::error_code ec;
+            const fs::path mcpsDir = root / ".workspace" / "mcps";
+            if (!root.empty() && fs::is_directory(mcpsDir, ec)) {
+                for (const auto& entry : fs::directory_iterator(mcpsDir, ec)) {
+                    if (!entry.is_regular_file(ec) || entry.path().extension() != ".json") continue;
+                    ++installedMcpCount;
+                    auto parsed = jsonutil::tryParse(jsonutil::readFile(entry.path()));
+                    if (parsed && parsed->is_object()) {
+                        for (const auto& v : LibraryCatalog::extractMcpEnvVars(*parsed)) {
+                            varsToCheck.insert(v);
+                        }
+                    }
+                }
+            }
+            Json varList = Json::array();
+            Json missing = Json::array();
+            for (const auto& var : varsToCheck) {
+                const bool configured = !platform::getEnv(var).empty();
+                varList.push_back(Json{{"name", var}, {"configured", configured}, {"secret", isSecretEnvName(var)}});
+                if (!configured) missing.push_back(var);
+            }
+
+            const auto tc = build::detectToolchain();
+            const auto rtLayout = build::locateRuntime();
+            const std::string provider = platform::getEnv("ARESTRIX_DEFAULT_PROVIDER");
+            const std::string model = platform::getEnv("ARESTRIX_DEFAULT_MODEL");
+            Json result{
+                {"vars", varList},
+                {"missingVars", missing},
+                {"installedMcpCount", installedMcpCount},
+                {"studioDefaults", Json{
+                    {"providerConfigured", !provider.empty()},
+                    {"provider", provider},
+                    {"modelConfigured", !model.empty()},
+                    {"model", model}
+                }},
+                {"toolchain", Json{
+                    {"available", tc.kind != build::Toolchain::Kind::None},
+                    {"description", tc.description},
+                    {"runtimeReady", rtLayout.ok},
+                    {"runtimeError", rtLayout.ok ? std::string() : rtLayout.error}
+                }}
+            };
+            return okOutcome(result, name, Json{{"checked", varList.size()}, {"missing", missing.size()}});
+        }
+
+        if (name == "configure_environment") {
+            Json toSet = argObj(args, "set_non_secret");
+            Json applied = Json::array();
+            Json blocked = Json::array();
+            Json errors = Json::array();
+            for (auto it = toSet.begin(); it != toSet.end(); ++it) {
+                const std::string key = it.key();
+                if (!isValidEnvName(key)) {
+                    errors.push_back(key + ": nome de variavel invalido (use MAIUSCULAS_COM_UNDERSCORE)");
+                    continue;
+                }
+                if (isSecretEnvName(key)) {
+                    blocked.push_back(key);
+                    continue;
+                }
+                if (!it.value().is_string() || it.value().get<std::string>().empty()) {
+                    errors.push_back(key + ": valor deve ser string nao vazia");
+                    continue;
+                }
+                std::string err;
+                if (host.setNonSecretEnv(key, it.value().get<std::string>(), err)) {
+                    applied.push_back(key);
+                } else {
+                    errors.push_back(key + ": " + err);
+                }
+            }
+            Json requestedSecrets = Json::array();
+            if (args.contains("request_user_secrets") && args.at("request_user_secrets").is_array()) {
+                for (const auto& s : args.at("request_user_secrets").arr()) {
+                    if (s.is_string() && isValidEnvName(s.get<std::string>())) {
+                        requestedSecrets.push_back(Json{
+                            {"name", s.get<std::string>()},
+                            {"configured", !platform::getEnv(s.get<std::string>()).empty()}
+                        });
+                    }
+                }
+            }
+            if (!blocked.empty() && applied.empty() && requestedSecrets.empty()) {
+                return fail(langPick(lang, "Bloqueado: segredos nunca devem ser enviados pelo chat. Informe os nomes em request_user_secrets para o usuario configurar no Studio: ",
+                                     "Blocked: secrets must never be sent through chat. Pass names in request_user_secrets for the user to configure safely in Studio: ") +
+                                blocked.dump(), name);
+            }
+            return okOutcome(Json{
+                {"applied", applied},
+                {"blockedSecrets", blocked},
+                {"requestedUserSecrets", requestedSecrets},
+                {"errors", errors},
+                {"guidance", langPick(lang,
+                    "Peca ao usuario para preencher as variaveis secretas ausentes em Configuracoes > Ambiente do Studio (sem colar chaves no chat).",
+                    "Ask the user to fill missing secret variables in Studio Settings > Environment (never paste keys in chat).")}
+            }, name, Json{{"applied", applied.size()}, {"secrets", requestedSecrets.size()}});
+        }
+
+        if (name == "compile_project") {
+            const fs::path root = projectRootOf(host);
+            Json v = doc.validate(lang);
+            appendMcpGovernance(doc, root, lang, v);
+            if (!v.value("ok", false)) {
+                return fail(langPick(lang, "O grafo tem erros e nao foi compilado: ",
+                                     "The graph has errors and was not compiled: ") +
+                                v.at("errors").dump(), name);
+            }
+            std::string saveErr;
+            if (!host.savePipeline(doc.schema(), saveErr)) {
+                return fail(langPick(lang, "Falha ao salvar o grafo antes de compilar: ",
+                                     "Failed to save graph before compiling: ") + saveErr, name);
+            }
+            const std::string mode = lowerAscii(argStr(args, "mode"));
+            const bool exportStandalone = (mode != "check");
+            Json runnerPatch = Json::object();
+            if (!argStr(args, "output_name").empty()) runnerPatch["outputName"] = argStr(args, "output_name");
+            if (!argStr(args, "output_dir").empty()) runnerPatch["outputDir"] = argStr(args, "output_dir");
+            if (!argStr(args, "title").empty()) runnerPatch["title"] = argStr(args, "title");
+
+            std::string compErr;
+            Json compRes = host.compileProject(doc.schema(), exportStandalone, runnerPatch, compErr);
+            if (!compRes.is_object() || !compRes.value("ok", false)) {
+                std::string detail = !compErr.empty() ? compErr : compRes.value("error", std::string("Falha na compilacao."));
+                return fail(detail, name);
+            }
+            return okOutcome(compRes, name, Json{
+                {"mode", exportStandalone ? "standalone" : "check"},
+                {"executable", compRes.value("executablePath", std::string())}
+            });
         }
 
         if (name == "create_project" || name == "open_project") {
@@ -1552,6 +1947,7 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
         }
         if (name == "run_pipeline") {
             Json v = doc.validate(lang);
+            appendMcpGovernance(doc, projectRootOf(host), lang, v);
             if (!v.value("ok", false)) {
                 return fail(langPick(lang, "O grafo tem erros e nao foi executado: ", "The graph has errors and was not run: ") +
                                 v.at("errors").dump(), name);

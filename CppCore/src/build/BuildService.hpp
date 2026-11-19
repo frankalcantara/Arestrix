@@ -59,6 +59,12 @@ struct BuildResult {
     std::string stage;   // "toolchain" | "generate" | "compile" | "run" | ""
 };
 
+// Gera o codigo C++20 e compila o executavel sem executa-lo (ideal para verificacao e exportacao standalone).
+BuildResult buildOnly(const core::Graph& graph,
+                      const std::filesystem::path& projectRoot,
+                      const BuildEvents& events,
+                      const std::atomic<bool>* cancel = nullptr);
+
 // Executa o fluxo completo (gerar -> compilar -> rodar) de forma bloqueante.
 BuildResult buildAndRun(const core::Graph& graph,
                         const std::filesystem::path& projectRoot,

@@ -12361,6 +12361,124 @@ TEST(assistant_library_tools_list_get_and_add_node) {
     fs::remove_all(root);
 }
 
+TEST(assistant_copilot_mcp_library_env_and_standalone_compile) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+
+    struct CopilotTestHost : FakeAssistantHost {
+        std::map<std::string, std::string> appliedEnv;
+        bool compileCalled = false;
+        bool lastExportStandalone = false;
+        json lastRunnerPatch = json::object();
+
+        bool setNonSecretEnv(const std::string& key, const std::string& value, std::string& error) override {
+            (void)error;
+            appliedEnv[key] = value;
+            return true;
+        }
+        json compileProject(const json& schema, bool exportStandalone, const json& runnerPatch,
+                            std::string& error) override {
+            (void)schema;
+            (void)error;
+            compileCalled = true;
+            lastExportStandalone = exportStandalone;
+            lastRunnerPatch = runnerPatch;
+            return json{
+                {"ok", true},
+                {"mode", exportStandalone ? "standalone" : "check"},
+                {"executablePath", "dist/runner/demo.exe"},
+                {"manifestPath", "dist/runner/runner_manifest.json"}
+            };
+        }
+    };
+
+    CopilotTestHost host;
+    fs::path root = makeTempDir("assistant-copilot-mcp");
+    host.project["rootPath"] = root.string();
+    as::GraphDocument doc(json{{"nodes", json::array()}, {"edges", json::array()}});
+
+    // 1. Taxonomia em 2 niveis sobre os 500 MCPs embutidos
+    auto tax = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "library_taxonomy", json{{"kind", "mcp"}});
+    CHECK(!tax.result.isError);
+    auto taxJson = taskforge::jsonutil::parse(tax.result.content);
+    CHECK(taxJson.value("total", 0) >= 500);
+    CHECK(taxJson["domains"].is_object());
+
+    // 2. Busca multi-token com filtro de transporte / zero_auth
+    auto search = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_search_assets",
+        json{{"query", "github"}, {"kind", "mcp"}, {"limit", 5}});
+    CHECK(!search.result.isError);
+    auto searchJson = taskforge::jsonutil::parse(search.result.content);
+    CHECK(searchJson["assets"].size() >= 1);
+    const std::string mcpAssetId = searchJson["assets"][0].value("id", std::string());
+    CHECK(!mcpAssetId.empty());
+
+    // 3. Detalhe compacto com requiredEnvVars e cachedTools
+    auto detail = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "library_get_asset", json{{"id", mcpAssetId}});
+    CHECK(!detail.result.isError);
+    auto detailJson = taskforge::jsonutil::parse(detail.result.content);
+    CHECK(detailJson.contains("requiredEnvVars"));
+    CHECK(detailJson.contains("envStatus"));
+
+    // 4. 1-step library_add_node em ativo MCP: instala em .workspace/mcps, grava mcp-ledger e cria vertice type=mcp
+    auto addedMcp = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "library_add_node",
+        json{{"asset_id", mcpAssetId}, {"label", "GitHub MCP"}, {"tool", "list_issues"}});
+    CHECK(!addedMcp.result.isError);
+    auto addedMcpJson = taskforge::jsonutil::parse(addedMcp.result.content);
+    CHECK(addedMcpJson.value("type", std::string()) == "mcp");
+    CHECK(addedMcpJson.value("installed", false) == true);
+    CHECK(addedMcpJson.value("server", std::string()) == mcpAssetId);
+    CHECK(addedMcpJson.value("tool", std::string()) == "list_issues");
+    CHECK(fs::is_regular_file(root / ".workspace" / "mcps" / (mcpAssetId + ".json")));
+    CHECK(fs::is_regular_file(root / ".workspace" / "governance" / "mcp-ledger.json"));
+
+    // 5. validate_graph passa sem erros de governanca MCP
+    auto val = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "validate_graph", json::object());
+    CHECK(!val.result.isError);
+    auto valJson = taskforge::jsonutil::parse(val.result.content);
+    CHECK(valJson.value("ok", false) == true);
+
+    // 6. check_environment retorna status booleano e toolchain sem expor segredos
+    auto envCheck = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "check_environment",
+        json{{"vars", json::array({"ARESTRIX_TEST_NONEXISTENT_VAR"})}});
+    CHECK(!envCheck.result.isError);
+    auto envJson = taskforge::jsonutil::parse(envCheck.result.content);
+    CHECK(envJson.value("installedMcpCount", 0) >= 1);
+    CHECK(envJson["toolchain"].is_object());
+
+    // 7. configure_environment aplica nao-segredos e bloqueia segredos em texto claro
+    auto cfgEnv = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "configure_environment",
+        json{
+            {"set_non_secret", json{{"AWS_REGION", "us-east-1"}, {"GITHUB_PERSONAL_ACCESS_TOKEN", "ghp_blocked"}}},
+            {"request_user_secrets", json::array({"GITHUB_PERSONAL_ACCESS_TOKEN"})}
+        });
+    CHECK(!cfgEnv.result.isError);
+    auto cfgJson = taskforge::jsonutil::parse(cfgEnv.result.content);
+    CHECK(host.appliedEnv["AWS_REGION"] == "us-east-1");
+    CHECK(host.appliedEnv.count("GITHUB_PERSONAL_ACCESS_TOKEN") == 0);
+    CHECK(cfgJson["blockedSecrets"].size() == 1);
+    CHECK(cfgJson["requestedUserSecrets"].size() == 1);
+
+    // 8. compile_project valida, salva e invoca exportacao standalone
+    auto comp = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "compile_project",
+        json{{"mode", "standalone"}, {"output_name", "demo"}, {"title", "Demo App"}});
+    CHECK(!comp.result.isError);
+    CHECK(host.compileCalled == true);
+    CHECK(host.lastExportStandalone == true);
+    CHECK(host.lastRunnerPatch.value("outputName", std::string()) == "demo");
+    CHECK(as::toolRisk("compile_project") == as::ToolRisk::Confirm);
+    CHECK(as::toolRisk("configure_environment") == as::ToolRisk::Confirm);
+    CHECK(as::toolRisk("library_taxonomy") == as::ToolRisk::Read);
+    CHECK(as::toolRisk("library_install_asset") == as::ToolRisk::Edit);
+
+    fs::remove_all(root);
+}
+
 TEST(assistant_attaches_only_audited_mcp_servers) {
     namespace as = taskforge::assistant;
     using taskforge::rt::RuntimeLang;

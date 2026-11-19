@@ -45,21 +45,32 @@ public:
     const Json* find(const std::string& assetId) const;
     const Json* findLibrary(const std::string& libraryId) const;
 
-    // Lista compacta para o modelo, com filtros opcionais.
+    // Lista compacta para o modelo, com filtros opcionais (incluindo transporte e zero-auth para MCPs).
     Json list(const std::string& libraryId, const std::string& kind,
               const std::string& domain, const std::string& subdomain,
-              int limit, int offset) const;
+              int limit, int offset,
+              const std::string& transport = "",
+              bool zeroAuthOnly = false) const;
 
-    // Busca textual em nome, descricao, categoria, dominio e subdominio.
-    Json search(const std::string& query, const std::string& kind, int limit) const;
+    // Busca textual multi-token em nome, descricao, categoria, dominio, subdominio, repo e tools MCP.
+    Json search(const std::string& query, const std::string& kind, int limit,
+                const std::string& domain = "", const std::string& subdomain = "",
+                const std::string& transport = "", bool zeroAuthOnly = false,
+                int offset = 0) const;
+
+    // Taxonomia de 2 niveis (dominio -> subdominio -> contagem) para orientacao rapida do assistente.
+    Json taxonomy(const std::string& kind = "") const;
 
     // Asset completo, com textos longos truncados para caber no contexto do modelo.
     std::optional<Json> detail(const std::string& assetId) const;
 
     // Converte um asset em dados de vertice prontos para GraphDocument::addNodeJson.
-    // Aceita agent-template, pipeline e skill; MCP exige attach_mcp e devolve erro.
+    // Aceita agent-template, pipeline, skill e mcp (criando vertice de interacao type='mcp').
     bool buildNodeFromAsset(const Json& asset, const std::string& label, const Json& parameterOverrides,
                             rt::RuntimeLang lang, Json& node, std::string& error) const;
+
+    // Extrai todos os nomes de variaveis ${VAR} exigidas por um payload MCP (sem valores).
+    static std::vector<std::string> extractMcpEnvVars(const Json& payload);
 
     // --- Escritas na biblioteca do Workspace ---------------------------------
     // Todas recarregam o estado, alteram o asset e gravam `.workspace/libraries.json`

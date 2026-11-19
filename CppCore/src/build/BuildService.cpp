@@ -147,10 +147,13 @@ RuntimeLayout locateRuntime() {
 }
 
 // ---------------------------------------------------------------------------
-BuildResult buildAndRun(const core::Graph& graph,
-                        const fs::path& projectRoot,
-                        const BuildEvents& ev,
-                        const std::atomic<bool>* cancel) {
+namespace {
+
+BuildResult buildImpl(const core::Graph& graph,
+                      const fs::path& projectRoot,
+                      const BuildEvents& ev,
+                      bool executeAfterCompile,
+                      const std::atomic<bool>* cancel) {
     using Clock = std::chrono::steady_clock;
     auto t0 = Clock::now();
     BuildResult result;
@@ -287,6 +290,11 @@ BuildResult buildAndRun(const core::Graph& graph,
         }
     }
 
+    if (!executeAfterCompile) {
+        result.exitCode = 0;
+        return finish(true, "compile", "");
+    }
+
     // 4. Executa
     phase("running", "Executando o pipeline...");
     platform::ProcessSpec runSpec;
@@ -400,6 +408,22 @@ BuildResult buildAndRun(const core::Graph& graph,
     if (cancelled) return finish(false, "run", "Execucao cancelada pelo usuario.");
     if (code != 0) return finish(false, "run", "O pipeline terminou com erro (codigo " + std::to_string(code) + ").");
     return finish(true, "", "");
+}
+
+} // namespace
+
+BuildResult buildOnly(const core::Graph& graph,
+                      const fs::path& projectRoot,
+                      const BuildEvents& ev,
+                      const std::atomic<bool>* cancel) {
+    return buildImpl(graph, projectRoot, ev, false, cancel);
+}
+
+BuildResult buildAndRun(const core::Graph& graph,
+                        const fs::path& projectRoot,
+                        const BuildEvents& ev,
+                        const std::atomic<bool>* cancel) {
+    return buildImpl(graph, projectRoot, ev, true, cancel);
 }
 
 // ---------------------------------------------------------------------------
