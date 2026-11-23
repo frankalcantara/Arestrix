@@ -40,17 +40,17 @@
   },
   "dependencies": {
     "@hpcc-js/wasm": "^2.36.0",
-    "lucide": "^1.70.0",
+    "lucide": "^1.77.0",
     "monaco-editor": "^0.57.0",
     "three": "^0.187.0"
   },
   "devDependencies": {
     "@types/three": "^0.187.0",
-    "puppeteer-core": "^25.16.0",
+    "puppeteer-core": "^25.18.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.6",
+    "vite": "^8.3.8",
     "vite-plugin-singlefile": "^2.3.4",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "overrides": {
     "dompurify": "^3.4.17"
